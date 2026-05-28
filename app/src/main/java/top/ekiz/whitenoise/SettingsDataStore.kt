@@ -20,7 +20,6 @@ class SettingsDataStore(private val context: Context) {
         val NOISE_TYPE_KEY = stringPreferencesKey("noise_type")
         val SLEEP_TIMER_KEY = intPreferencesKey("sleep_timer")
         val BALANCE_KEY = floatPreferencesKey("balance")
-        val STEREO_WIDTH_KEY = floatPreferencesKey("stereo_width")
         val THEME_MODE_KEY = stringPreferencesKey("theme_mode")
     }
 
@@ -45,9 +44,6 @@ class SettingsDataStore(private val context: Context) {
     val balanceFlow: Flow<Float> = context.dataStore.data
         .map { preferences -> preferences[BALANCE_KEY] ?: 0f }
 
-    val stereoWidthFlow: Flow<Float> = context.dataStore.data
-        .map { preferences -> preferences[STEREO_WIDTH_KEY] ?: 1f }
-
     val themeModeFlow: Flow<String> = context.dataStore.data
         .map { preferences -> preferences[THEME_MODE_KEY] ?: "System" }
 
@@ -69,10 +65,6 @@ class SettingsDataStore(private val context: Context) {
 
     suspend fun saveBalance(balance: Float) {
         context.dataStore.edit { preferences -> preferences[BALANCE_KEY] = balance }
-    }
-
-    suspend fun saveStereoWidth(width: Float) {
-        context.dataStore.edit { preferences -> preferences[STEREO_WIDTH_KEY] = width }
     }
 
     suspend fun saveThemeMode(mode: String) {

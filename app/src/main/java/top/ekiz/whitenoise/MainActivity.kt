@@ -28,8 +28,7 @@ import androidx.compose.material.icons.filled.Headset
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.filled.SurroundSound
+    import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -111,7 +110,6 @@ fun MainAppScreen(isBound: Boolean, service: NoiseService?, dataStore: SettingsD
     val initialVolume by dataStore.volumeFlow.collectAsState(initial = 0.5f)
     val initialNoiseType by dataStore.noiseTypeFlow.collectAsState(initial = NoiseType.WHITE)
     val initialBalance by dataStore.balanceFlow.collectAsState(initial = 0f)
-    val initialStereoWidth by dataStore.stereoWidthFlow.collectAsState(initial = 1f)
     val initialSleepTimer by dataStore.sleepTimerFlow.collectAsState(initial = 0)
     val initialThemeMode by dataStore.themeModeFlow.collectAsState(initial = "System")
     
@@ -119,20 +117,17 @@ fun MainAppScreen(isBound: Boolean, service: NoiseService?, dataStore: SettingsD
     var isPlaying by remember { mutableStateOf(false) }
     var volume by remember { mutableFloatStateOf(0.5f) }
     var balance by remember { mutableFloatStateOf(0f) }
-    var stereoWidth by remember { mutableFloatStateOf(1f) }
     var noiseType by remember { mutableStateOf(NoiseType.WHITE) }
     
     // Sync local state from DataStore initially
-    LaunchedEffect(initialVolume, initialNoiseType, initialBalance, initialStereoWidth) {
+    LaunchedEffect(initialVolume, initialNoiseType, initialBalance) {
         volume = initialVolume
         noiseType = initialNoiseType
         balance = initialBalance
-        stereoWidth = initialStereoWidth
         
         service?.setVolume(volume)
         service?.setNoiseType(noiseType)
         service?.setBalance(balance)
-        service?.setStereoWidth(stereoWidth)
     }
 
     var remainingTimeMillis by remember { mutableLongStateOf(0L) }
@@ -188,7 +183,6 @@ fun MainAppScreen(isBound: Boolean, service: NoiseService?, dataStore: SettingsD
             service?.setVolume(volume)
             service?.setNoiseType(noiseType)
             service?.setBalance(balance)
-            service?.setStereoWidth(stereoWidth)
             service?.setSleepTimer(initialSleepTimer)
             if (initialSleepTimer > 0) {
                 service?.startSleepTimer()
@@ -260,12 +254,6 @@ fun MainAppScreen(isBound: Boolean, service: NoiseService?, dataStore: SettingsD
                     balance = it
                     service?.setBalance(it)
                     coroutineScope.launch { dataStore.saveBalance(it) }
-                },
-                stereoWidth = stereoWidth,
-                onStereoWidthChanged = {
-                    stereoWidth = it
-                    service?.setStereoWidth(it)
-                    coroutineScope.launch { dataStore.saveStereoWidth(it) }
                 },
                 sleepTimer = initialSleepTimer,
                 onSleepTimerChanged = {
@@ -380,7 +368,6 @@ fun SettingsScreen(
     innerPadding: PaddingValues,
     volume: Float, onVolumeChanged: (Float) -> Unit,
     balance: Float, onBalanceChanged: (Float) -> Unit,
-    stereoWidth: Float, onStereoWidthChanged: (Float) -> Unit,
     sleepTimer: Int, onSleepTimerChanged: (Int) -> Unit,
     isTimerRunning: Boolean, onStartTimer: () -> Unit, onPauseTimer: () -> Unit,
     remainingTimeMillis: Long, totalTimeMillis: Long,
@@ -420,15 +407,6 @@ fun SettingsScreen(
             labels = listOf("偏左", "居中", "偏右")
         )
         
-        SliderSettingRow(
-            icon = Icons.Filled.SurroundSound,
-            contentDescription = "立体声宽度",
-            value = stereoWidth,
-            onValueChange = onStereoWidthChanged,
-            valueRange = 0f..1f,
-            labels = listOf("单声道", "全立体")
-        )
-
         HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
 
         // 定时关闭模块

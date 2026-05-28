@@ -78,10 +78,6 @@ class NoiseService : Service() {
         generator.balance = balance
     }
 
-    fun setStereoWidth(width: Float) {
-        generator.stereoWidth = width
-    }
-
     fun setNoiseType(type: NoiseType) {
         generator.noiseType = type
     }
