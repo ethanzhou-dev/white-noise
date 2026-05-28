@@ -25,6 +25,8 @@ class NoiseService : Service() {
     
     private var sleepEndTimeMillis: Long = 0L
     private var sleepTotalTimeMillis: Long = 0L
+    private var sleepRemainingPausedMillis: Long = 0L
+    private var isSleepTimerPaused: Boolean = false
 
     companion object {
         const val CHANNEL_ID = "WhiteNoiseChannel"
@@ -62,6 +64,8 @@ class NoiseService : Service() {
         sleepTimerJob?.cancel()
         sleepEndTimeMillis = 0L
         sleepTotalTimeMillis = 0L
+        sleepRemainingPausedMillis = 0L
+        isSleepTimerPaused = false
         stopForeground(STOP_FOREGROUND_REMOVE)
         stopSelf()
     }
@@ -86,23 +90,52 @@ class NoiseService : Service() {
         sleepTimerJob?.cancel()
         if (minutes > 0) {
             sleepTotalTimeMillis = minutes * 60 * 1000L
-            sleepEndTimeMillis = System.currentTimeMillis() + sleepTotalTimeMillis
+            sleepRemainingPausedMillis = sleepTotalTimeMillis
+            isSleepTimerPaused = true
+            sleepEndTimeMillis = 0L
+        } else {
+            sleepEndTimeMillis = 0L
+            sleepTotalTimeMillis = 0L
+            sleepRemainingPausedMillis = 0L
+            isSleepTimerPaused = false
+        }
+    }
+    
+    fun startSleepTimer() {
+        if (isSleepTimerPaused && sleepRemainingPausedMillis > 0) {
+            sleepEndTimeMillis = System.currentTimeMillis() + sleepRemainingPausedMillis
+            isSleepTimerPaused = false
+            sleepTimerJob?.cancel()
             sleepTimerJob = serviceScope.launch {
-                delay(sleepTotalTimeMillis)
+                delay(sleepRemainingPausedMillis)
                 if (isPlaying()) {
                     stopPlayback()
                 }
                 sleepEndTimeMillis = 0L
                 sleepTotalTimeMillis = 0L
+                sleepRemainingPausedMillis = 0L
+                isSleepTimerPaused = false
             }
-        } else {
-            sleepEndTimeMillis = 0L
-            sleepTotalTimeMillis = 0L
         }
     }
     
+    fun pauseSleepTimer() {
+        if (sleepEndTimeMillis > 0L && !isSleepTimerPaused) {
+            sleepTimerJob?.cancel()
+            sleepRemainingPausedMillis = maxOf(0L, sleepEndTimeMillis - System.currentTimeMillis())
+            isSleepTimerPaused = true
+            sleepEndTimeMillis = 0L
+        }
+    }
+    
+    fun isSleepTimerRunning(): Boolean {
+        return sleepEndTimeMillis > 0L && !isSleepTimerPaused
+    }
+    
     fun getSleepRemainingMillis(): Long {
-        return if (sleepEndTimeMillis > 0L) {
+        return if (isSleepTimerPaused) {
+            sleepRemainingPausedMillis
+        } else if (sleepEndTimeMillis > 0L) {
             maxOf(0L, sleepEndTimeMillis - System.currentTimeMillis())
         } else {
             0L

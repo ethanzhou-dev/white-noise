@@ -137,9 +137,9 @@ fun MainAppScreen(isBound: Boolean, service: NoiseService?, dataStore: SettingsD
         service?.setStereoWidth(stereoWidth)
     }
 
-    // Polling isPlaying state
     var remainingTimeMillis by remember { mutableLongStateOf(0L) }
     var totalTimeMillis by remember { mutableLongStateOf(0L) }
+    var isTimerRunning by remember { mutableStateOf(false) }
     
     LaunchedEffect(isBound, service) {
         while (true) {
@@ -147,6 +147,7 @@ fun MainAppScreen(isBound: Boolean, service: NoiseService?, dataStore: SettingsD
                 isPlaying = service.isPlaying()
                 remainingTimeMillis = service.getSleepRemainingMillis()
                 totalTimeMillis = service.getSleepTotalMillis()
+                isTimerRunning = service.isSleepTimerRunning()
             }
             delay(500)
         }
@@ -191,6 +192,9 @@ fun MainAppScreen(isBound: Boolean, service: NoiseService?, dataStore: SettingsD
             service?.setBalance(balance)
             service?.setStereoWidth(stereoWidth)
             service?.setSleepTimer(initialSleepTimer)
+            if (initialSleepTimer > 0) {
+                service?.startSleepTimer()
+            }
             
             service?.startPlayback()
         }
@@ -275,8 +279,11 @@ fun MainAppScreen(isBound: Boolean, service: NoiseService?, dataStore: SettingsD
                     sleepTimer = initialSleepTimer,
                     onSleepTimerChanged = {
                         coroutineScope.launch { dataStore.saveSleepTimer(it) }
-                        if (isPlaying) service?.setSleepTimer(it)
+                        service?.setSleepTimer(it)
                     },
+                    isTimerRunning = isTimerRunning,
+                    onStartTimer = { service?.startSleepTimer() },
+                    onPauseTimer = { service?.pauseSleepTimer() },
                     remainingTimeMillis = remainingTimeMillis,
                     totalTimeMillis = totalTimeMillis,
                     themeMode = initialThemeMode,
@@ -415,6 +422,7 @@ fun SettingsScreen(
     balance: Float, onBalanceChanged: (Float) -> Unit,
     stereoWidth: Float, onStereoWidthChanged: (Float) -> Unit,
     sleepTimer: Int, onSleepTimerChanged: (Int) -> Unit,
+    isTimerRunning: Boolean, onStartTimer: () -> Unit, onPauseTimer: () -> Unit,
     remainingTimeMillis: Long, totalTimeMillis: Long,
     themeMode: String, onThemeModeChanged: (String) -> Unit
 ) {
@@ -430,6 +438,62 @@ fun SettingsScreen(
             Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
                 Box(modifier = Modifier.width(2.dp).height(12.dp).background(MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)))
                 Slider(value = volume, onValueChange = onVolumeChanged, valueRange = 0f..1f, steps = 9, modifier = Modifier.fillMaxWidth())
+            }
+        }
+
+        // Sleep Timer
+        SettingSection(title = "定时关闭") {
+            var customMinutesInput by remember(sleepTimer) { mutableStateOf(if (sleepTimer > 0) sleepTimer.toString() else "") }
+            
+            OutlinedTextField(
+                value = customMinutesInput,
+                onValueChange = { newValue ->
+                    val filtered = newValue.filter { char -> char.isDigit() }
+                    customMinutesInput = filtered
+                    val minutes = filtered.toIntOrNull() ?: 0
+                    onSleepTimerChanged(minutes)
+                },
+                label = { Text("定时关闭 (分钟)") },
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                modifier = Modifier.fillMaxWidth(),
+                trailingIcon = { Text("分钟", modifier = Modifier.padding(end = 16.dp)) },
+                singleLine = true
+            )
+            
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(top = 16.dp),
+                horizontalArrangement = Arrangement.SpaceEvenly
+            ) {
+                Button(
+                    onClick = onStartTimer,
+                    enabled = !isTimerRunning && (sleepTimer > 0)
+                ) {
+                    Text("开始")
+                }
+                OutlinedButton(
+                    onClick = onPauseTimer,
+                    enabled = isTimerRunning
+                ) {
+                    Text("暂停")
+                }
+            }
+
+            if (totalTimeMillis > 0L) {
+                val progress = if (totalTimeMillis > 0) remainingTimeMillis.toFloat() / totalTimeMillis.toFloat() else 0f
+                val remainingMinutes = remainingTimeMillis / 60000
+                val remainingSeconds = (remainingTimeMillis % 60000) / 1000
+                Spacer(modifier = Modifier.height(16.dp))
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                    Text("剩余时间: ${"%02d:%02d".format(remainingMinutes, remainingSeconds)}", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
+                    Text("${(progress * 100).toInt()}%", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
+                }
+                LinearProgressIndicator(
+                    progress = progress,
+                    modifier = Modifier.fillMaxWidth().padding(top = 8.dp).height(8.dp),
+                    trackColor = MaterialTheme.colorScheme.surfaceVariant,
+                    color = MaterialTheme.colorScheme.primary,
+                    strokeCap = StrokeCap.Round
+                )
             }
         }
 
@@ -455,44 +519,6 @@ fun SettingsScreen(
             Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp), horizontalArrangement = Arrangement.SpaceBetween) {
                 Text("单声道", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Text("全立体", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-        }
-
-        // Sleep Timer
-        SettingSection(title = "定时关闭") {
-            var customMinutesInput by remember(sleepTimer) { mutableStateOf(if (sleepTimer > 0) sleepTimer.toString() else "") }
-            
-            OutlinedTextField(
-                value = customMinutesInput,
-                onValueChange = { newValue ->
-                    val filtered = newValue.filter { char -> char.isDigit() }
-                    customMinutesInput = filtered
-                    val minutes = filtered.toIntOrNull() ?: 0
-                    onSleepTimerChanged(minutes)
-                },
-                label = { Text("定时关闭 (分钟)") },
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                modifier = Modifier.fillMaxWidth(),
-                trailingIcon = { Text("分钟", modifier = Modifier.padding(end = 16.dp)) },
-                singleLine = true
-            )
-
-            if (totalTimeMillis > 0L) {
-                val progress = if (totalTimeMillis > 0) remainingTimeMillis.toFloat() / totalTimeMillis.toFloat() else 0f
-                val remainingMinutes = remainingTimeMillis / 60000
-                val remainingSeconds = (remainingTimeMillis % 60000) / 1000
-                Spacer(modifier = Modifier.height(16.dp))
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                    Text("剩余时间: ${"%02d:%02d".format(remainingMinutes, remainingSeconds)}", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
-                    Text("${(progress * 100).toInt()}%", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
-                }
-                LinearProgressIndicator(
-                    progress = progress,
-                    modifier = Modifier.fillMaxWidth().padding(top = 8.dp).height(8.dp),
-                    trackColor = MaterialTheme.colorScheme.surfaceVariant,
-                    color = MaterialTheme.colorScheme.primary,
-                    strokeCap = StrokeCap.Round
-                )
             }
         }
 
