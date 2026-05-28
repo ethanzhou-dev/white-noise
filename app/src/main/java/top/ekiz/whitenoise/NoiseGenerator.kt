@@ -21,11 +21,12 @@ class NoiseGenerator {
     private val scope = CoroutineScope(Dispatchers.Default)
 
     private val sampleRate = 44100
-    private val bufferSize = AudioTrack.getMinBufferSize(
+    private val minBufferSize = AudioTrack.getMinBufferSize(
         sampleRate,
         AudioFormat.CHANNEL_OUT_STEREO,
         AudioFormat.ENCODING_PCM_16BIT
     )
+    private val trackBufferSize = minBufferSize * 4
 
     @Volatile
     var volume: Float = 0.5f // 0.0 to 1.0
@@ -61,14 +62,15 @@ class NoiseGenerator {
                     .setChannelMask(AudioFormat.CHANNEL_OUT_STEREO)
                     .build()
             )
-            .setBufferSizeInBytes(bufferSize)
+            .setBufferSizeInBytes(trackBufferSize)
             .setTransferMode(AudioTrack.MODE_STREAM)
             .build()
 
         audioTrack?.play()
 
         job = scope.launch {
-            val numShorts = bufferSize and 1.inv() // ensure even size for stereo (L, R interleaved)
+            android.os.Process.setThreadPriority(android.os.Process.THREAD_PRIORITY_URGENT_AUDIO)
+            val numShorts = minBufferSize and 1.inv() // ensure even size for stereo (L, R interleaved)
             val buffer = ShortArray(numShorts)
             
             // Left state
