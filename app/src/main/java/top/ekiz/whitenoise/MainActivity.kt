@@ -104,7 +104,7 @@ class MainActivity : ComponentActivity() {
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
                 ) {
-                    MainAppScreen(activity = this@MainActivity, uiState = uiState, viewModel = viewModel)
+                    MainAppScreen(uiState = uiState, viewModel = viewModel)
                 }
             }
         }
@@ -113,7 +113,7 @@ class MainActivity : ComponentActivity() {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun MainAppScreen(activity: MainActivity, uiState: NoiseUiState, viewModel: NoiseViewModel) {
+fun MainAppScreen(uiState: NoiseUiState, viewModel: NoiseViewModel) {
     val context = LocalContext.current
     
     // Permission handling for notifications (Android 13+)
