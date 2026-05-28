@@ -37,6 +37,9 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
+import androidx.activity.viewModels
+import top.ekiz.whitenoise.ui.NoiseViewModel
+import top.ekiz.whitenoise.ui.NoiseUiState
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
 import androidx.media3.session.MediaController
@@ -51,7 +54,7 @@ import javax.inject.Inject
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
 
-    @Inject lateinit var dataStore: SettingsDataStore
+    private val viewModel: NoiseViewModel by viewModels()
     private var controllerFuture: ListenableFuture<MediaController>? = null
     var mediaController: MediaController? = null
 
@@ -62,6 +65,7 @@ class MainActivity : ComponentActivity() {
         controllerFuture?.addListener(
             {
                 mediaController = controllerFuture?.get()
+                viewModel.setMediaController(mediaController)
             },
             MoreExecutors.directExecutor()
         )
@@ -77,8 +81,8 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         
         setContent {
-            val themeMode by dataStore.themeModeFlow.collectAsState(initial = "System")
-            val darkTheme = when (themeMode) {
+            val uiState by viewModel.uiState.collectAsState()
+            val darkTheme = when (uiState.themeMode) {
                 "Dark" -> true
                 "Light" -> false
                 else -> isSystemInDarkTheme()
@@ -89,7 +93,7 @@ class MainActivity : ComponentActivity() {
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
                 ) {
-                    MainAppScreen(this@MainActivity, dataStore)
+                    MainAppScreen(activity = this@MainActivity, uiState = uiState, viewModel = viewModel)
                 }
             }
         }
@@ -98,56 +102,9 @@ class MainActivity : ComponentActivity() {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun MainAppScreen(activity: MainActivity, dataStore: SettingsDataStore) {
+fun MainAppScreen(activity: MainActivity, uiState: NoiseUiState, viewModel: NoiseViewModel) {
     val context = LocalContext.current
-    val coroutineScope = rememberCoroutineScope()
     
-    val initialVolume by dataStore.volumeFlow.collectAsState(initial = 0.5f)
-    val initialNoiseType by dataStore.noiseTypeFlow.collectAsState(initial = NoiseType.WHITE)
-    val initialBalance by dataStore.balanceFlow.collectAsState(initial = 0f)
-    val initialSleepTimer by dataStore.sleepTimerFlow.collectAsState(initial = 0)
-    val timerEndTime by dataStore.timerEndTimeFlow.collectAsState(initial = 0L)
-    val timerRemaining by dataStore.timerRemainingFlow.collectAsState(initial = 0L)
-    val initialThemeMode by dataStore.themeModeFlow.collectAsState(initial = "System")
-    
-    var volume by remember { mutableFloatStateOf(0.5f) }
-    var balance by remember { mutableFloatStateOf(0f) }
-    var noiseType by remember { mutableStateOf(NoiseType.WHITE) }
-    
-    LaunchedEffect(initialVolume, initialNoiseType, initialBalance) {
-        volume = initialVolume
-        noiseType = initialNoiseType
-        balance = initialBalance
-    }
-
-    var isPlaying by remember { mutableStateOf(false) }
-    
-    // Local timer state for UI refresh
-    var localRemainingTime by remember { mutableLongStateOf(0L) }
-    
-    LaunchedEffect(timerEndTime, timerRemaining) {
-        while(true) {
-            if (timerEndTime > 0L) {
-                val rem = timerEndTime - System.currentTimeMillis()
-                localRemainingTime = if (rem > 0) rem else 0L
-            } else {
-                localRemainingTime = timerRemaining
-            }
-            delay(1000)
-        }
-    }
-
-    // Observe player state
-    LaunchedEffect(activity.mediaController) {
-        while (true) {
-            val controller = activity.mediaController
-            if (controller != null) {
-                isPlaying = controller.isPlaying
-            }
-            delay(500)
-        }
-    }
-
     // Permission handling for notifications (Android 13+)
     var hasNotificationPermission by remember {
         mutableStateOf(
@@ -174,15 +131,7 @@ fun MainAppScreen(activity: MainActivity, dataStore: SettingsDataStore) {
             permissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
             return
         }
-        
-        val controller = activity.mediaController
-        if (controller != null) {
-            if (controller.isPlaying) {
-                controller.pause()
-            } else {
-                controller.play()
-            }
-        }
+        viewModel.togglePlayPause()
     }
 
     var selectedTab by remember { mutableIntStateOf(0) }
@@ -195,8 +144,8 @@ fun MainAppScreen(activity: MainActivity, dataStore: SettingsDataStore) {
                     if (selectedTab == 0) {
                         IconButton(onClick = { onPlayPauseClicked() }) {
                             Icon(
-                                imageVector = if (isPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow,
-                                contentDescription = if (isPlaying) "暂停" else "播放"
+                                imageVector = if (uiState.isPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow,
+                                contentDescription = if (uiState.isPlaying) "暂停" else "播放"
                             )
                         }
                     }
@@ -223,49 +172,25 @@ fun MainAppScreen(activity: MainActivity, dataStore: SettingsDataStore) {
         if (selectedTab == 0) {
             SoundsScreen(
                 innerPadding = paddingValues,
-                currentType = noiseType,
-                onTypeSelected = { newType ->
-                    noiseType = newType
-                    coroutineScope.launch { dataStore.saveNoiseType(newType) }
-                }
+                currentType = uiState.noiseType,
+                onTypeSelected = { viewModel.setNoiseType(it) }
             )
         } else {
             SettingsScreen(
                 innerPadding = paddingValues,
-                volume = volume,
-                onVolumeChanged = {
-                    volume = it
-                    coroutineScope.launch { dataStore.saveVolume(it) }
-                },
-                balance = balance,
-                onBalanceChanged = {
-                    balance = it
-                    coroutineScope.launch { dataStore.saveBalance(it) }
-                },
-                sleepTimer = initialSleepTimer,
-                onSleepTimerChanged = {
-                    coroutineScope.launch { dataStore.saveSleepTimer(it) }
-                },
-                isTimerRunning = timerEndTime > 0L,
-                onStartTimer = {
-                    val totalMillis = if (timerRemaining > 0L) timerRemaining else initialSleepTimer * 60000L
-                    coroutineScope.launch {
-                        dataStore.saveTimerRemaining(0L)
-                        dataStore.saveTimerEndTime(System.currentTimeMillis() + totalMillis)
-                    }
-                },
-                onPauseTimer = {
-                    coroutineScope.launch {
-                        dataStore.saveTimerRemaining(localRemainingTime)
-                        dataStore.saveTimerEndTime(0L)
-                    }
-                },
-                remainingTimeMillis = localRemainingTime,
-                totalTimeMillis = initialSleepTimer * 60000L,
-                themeMode = initialThemeMode,
-                onThemeModeChanged = {
-                    coroutineScope.launch { dataStore.saveThemeMode(it) }
-                }
+                volume = uiState.volume,
+                onVolumeChanged = { viewModel.setVolume(it) },
+                balance = uiState.balance,
+                onBalanceChanged = { viewModel.setBalance(it) },
+                sleepTimer = uiState.sleepTimerMinutes,
+                onSleepTimerChanged = { viewModel.setSleepTimerMinutes(it) },
+                isTimerRunning = uiState.isTimerRunning,
+                onStartTimer = { viewModel.startTimer() },
+                onPauseTimer = { viewModel.pauseTimer() },
+                remainingTimeMillis = uiState.activeRemainingMillis,
+                totalTimeMillis = uiState.totalTimerMillis,
+                themeMode = uiState.themeMode,
+                onThemeModeChanged = { viewModel.setThemeMode(it) }
             )
         }
     }

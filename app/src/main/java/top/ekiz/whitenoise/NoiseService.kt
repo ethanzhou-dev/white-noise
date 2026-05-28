@@ -19,6 +19,12 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.cancel
 import android.media.AudioManager
+import android.os.Bundle
+import androidx.media3.session.SessionCommand
+import androidx.media3.session.SessionResult
+import com.google.common.util.concurrent.Futures
+import com.google.common.util.concurrent.ListenableFuture
+import kotlinx.coroutines.Job
 import javax.inject.Inject
 
 @AndroidEntryPoint
@@ -34,6 +40,7 @@ class NoiseService : MediaSessionService() {
     private lateinit var audioManager: AudioManager
     private var modeListener: Any? = null
     private var isPausedByCall = false
+    private var timerJob: Job? = null
 
     override fun onCreate() {
         super.onCreate()
@@ -60,7 +67,29 @@ class NoiseService : MediaSessionService() {
             )
             .build()
 
-        mediaSession = MediaSession.Builder(this, player).build()
+        val sessionCallback = object : MediaSession.Callback {
+            override fun onCustomCommand(
+                session: MediaSession,
+                controller: MediaSession.ControllerInfo,
+                customCommand: SessionCommand,
+                args: Bundle
+            ): ListenableFuture<SessionResult> {
+                when (customCommand.customAction) {
+                    "START_SLEEP_TIMER" -> {
+                        val durationMs = args.getLong("DURATION_MS", 0L)
+                        startTimer(durationMs)
+                    }
+                    "CANCEL_SLEEP_TIMER" -> {
+                        cancelTimer()
+                    }
+                }
+                return Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS))
+            }
+        }
+
+        mediaSession = MediaSession.Builder(this, player)
+            .setCallback(sessionCallback)
+            .build()
 
         // 365 days of silence in microseconds, practically infinite.
         // Some versions of SilenceMediaSource don't like C.TIME_UNSET, so we use a huge duration.
@@ -88,33 +117,30 @@ class NoiseService : MediaSessionService() {
             }
         }
 
-        // Sleep Timer Logic
-        serviceScope.launch {
-            settingsDataStore.timerEndTimeFlow.collectLatest { endTime ->
-                if (endTime > 0L) {
-                    val remaining = endTime - System.currentTimeMillis()
-                    if (remaining > 0) {
-                        if (remaining > 60000L) {
-                            delay(remaining - 60000L) // Wait until last 60 seconds
-                        }
-                        // Start fade out in the last minute
-                        noiseProcessor.fadeOut(60000L)
-                        val finalWait = endTime - System.currentTimeMillis()
-                        if (finalWait > 0) delay(finalWait)
-                        
-                        player.pause()
-                        noiseProcessor.fadeIn(100L) // reset fade for next time
-                        settingsDataStore.saveTimerEndTime(0L)
-                        settingsDataStore.saveTimerRemaining(0L)
-                    } else {
-                        player.pause()
-                        settingsDataStore.saveTimerEndTime(0L)
-                    }
-                }
-            }
-        }
-
         startCallMonitor()
+    }
+
+    private fun startTimer(durationMs: Long) {
+        timerJob?.cancel()
+        if (durationMs <= 0) return
+        timerJob = serviceScope.launch {
+            if (durationMs > 60000L) {
+                delay(durationMs - 60000L) // Wait until last 60 seconds
+                noiseProcessor.fadeOut(60000L)
+                delay(60000L)
+            } else {
+                noiseProcessor.fadeOut(durationMs)
+                delay(durationMs)
+            }
+            player.pause()
+            noiseProcessor.fadeIn(100L) // reset fade for next time
+        }
+    }
+
+    private fun cancelTimer() {
+        timerJob?.cancel()
+        timerJob = null
+        noiseProcessor.fadeIn(1000L) // reset fade in case it was fading out
     }
 
     private fun startCallMonitor() {
