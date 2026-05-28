@@ -29,7 +29,7 @@ import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.SurroundSound
-import androidx.compose.material.icons.filled.VolumeUp
+import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -379,7 +379,7 @@ fun SettingsScreen(
         )
         
         SliderSettingRow(
-            icon = Icons.Filled.VolumeUp,
+            icon = Icons.AutoMirrored.Filled.VolumeUp,
             contentDescription = "音量大小",
             value = volume,
             onValueChange = onVolumeChanged,
@@ -462,7 +462,7 @@ fun SettingsScreen(
                     Text("${(progress * 100).toInt()}%", style = MaterialTheme.typography.bodyMedium)
                 }
                 LinearProgressIndicator(
-                    progress = progress,
+                    progress = { progress },
                     modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
                     strokeCap = StrokeCap.Round
                 )
