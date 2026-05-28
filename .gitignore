@@ -49,9 +49,8 @@ captures/
 .idea/caches
 
 # Keystore files
-# Uncomment the following line if you don't want to track keystores (recommended)
-# *.jks
-# *.keystore
+*.jks
+*.keystore
 
 # External native build folder generated in Android Studio 2.2 and later
 .externalNativeBuild/

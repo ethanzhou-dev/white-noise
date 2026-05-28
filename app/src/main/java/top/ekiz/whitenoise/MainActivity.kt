@@ -2,19 +2,15 @@ package top.ekiz.whitenoise
 
 import android.Manifest
 import android.content.ComponentName
-import android.content.Context
 import android.content.Intent
-import android.content.ServiceConnection
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
-import android.os.IBinder
 import androidx.activity.ComponentActivity
-import androidx.activity.enableEdgeToEdge
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
+import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
-
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -23,15 +19,17 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Headset
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
-    import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.automirrored.filled.VolumeUp
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.StrokeCap
@@ -39,46 +37,44 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
+import androidx.media3.common.MediaItem
+import androidx.media3.common.Player
+import androidx.media3.session.MediaController
+import androidx.media3.session.SessionToken
+import com.google.common.util.concurrent.ListenableFuture
+import com.google.common.util.concurrent.MoreExecutors
+import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import javax.inject.Inject
 
+@AndroidEntryPoint
 class MainActivity : ComponentActivity() {
 
-    private var noiseService: NoiseService? = null
-    private var isBound = mutableStateOf(false)
-
-    private val connection = object : ServiceConnection {
-        override fun onServiceConnected(className: ComponentName, service: IBinder) {
-            val binder = service as NoiseService.LocalBinder
-            noiseService = binder.getService()
-            isBound.value = true
-        }
-
-        override fun onServiceDisconnected(arg0: ComponentName) {
-            isBound.value = false
-            noiseService = null
-        }
-    }
+    @Inject lateinit var dataStore: SettingsDataStore
+    private var controllerFuture: ListenableFuture<MediaController>? = null
+    var mediaController: MediaController? = null
 
     override fun onStart() {
         super.onStart()
-        Intent(this, NoiseService::class.java).also { intent ->
-            bindService(intent, connection, Context.BIND_AUTO_CREATE)
-        }
+        val sessionToken = SessionToken(this, ComponentName(this, NoiseService::class.java))
+        controllerFuture = MediaController.Builder(this, sessionToken).buildAsync()
+        controllerFuture?.addListener(
+            {
+                mediaController = controllerFuture?.get()
+            },
+            MoreExecutors.directExecutor()
+        )
     }
 
     override fun onStop() {
         super.onStop()
-        if (isBound.value) {
-            unbindService(connection)
-            isBound.value = false
-        }
+        controllerFuture?.let { MediaController.releaseFuture(it) }
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-        val dataStore = SettingsDataStore(this)
         
         setContent {
             val themeMode by dataStore.themeModeFlow.collectAsState(initial = "System")
@@ -93,7 +89,7 @@ class MainActivity : ComponentActivity() {
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
                 ) {
-                    MainAppScreen(isBound.value, noiseService, dataStore)
+                    MainAppScreen(this@MainActivity, dataStore)
                 }
             }
         }
@@ -102,45 +98,51 @@ class MainActivity : ComponentActivity() {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun MainAppScreen(isBound: Boolean, service: NoiseService?, dataStore: SettingsDataStore) {
+fun MainAppScreen(activity: MainActivity, dataStore: SettingsDataStore) {
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
     
-    // States from DataStore
     val initialVolume by dataStore.volumeFlow.collectAsState(initial = 0.5f)
     val initialNoiseType by dataStore.noiseTypeFlow.collectAsState(initial = NoiseType.WHITE)
     val initialBalance by dataStore.balanceFlow.collectAsState(initial = 0f)
     val initialSleepTimer by dataStore.sleepTimerFlow.collectAsState(initial = 0)
+    val timerEndTime by dataStore.timerEndTimeFlow.collectAsState(initial = 0L)
+    val timerRemaining by dataStore.timerRemainingFlow.collectAsState(initial = 0L)
     val initialThemeMode by dataStore.themeModeFlow.collectAsState(initial = "System")
     
-    // Local states
-    var isPlaying by remember { mutableStateOf(false) }
     var volume by remember { mutableFloatStateOf(0.5f) }
     var balance by remember { mutableFloatStateOf(0f) }
     var noiseType by remember { mutableStateOf(NoiseType.WHITE) }
     
-    // Sync local state from DataStore initially
     LaunchedEffect(initialVolume, initialNoiseType, initialBalance) {
         volume = initialVolume
         noiseType = initialNoiseType
         balance = initialBalance
-        
-        service?.setVolume(volume)
-        service?.setNoiseType(noiseType)
-        service?.setBalance(balance)
     }
 
-    var remainingTimeMillis by remember { mutableLongStateOf(0L) }
-    var totalTimeMillis by remember { mutableLongStateOf(0L) }
-    var isTimerRunning by remember { mutableStateOf(false) }
+    var isPlaying by remember { mutableStateOf(false) }
     
-    LaunchedEffect(isBound, service) {
+    // Local timer state for UI refresh
+    var localRemainingTime by remember { mutableLongStateOf(0L) }
+    
+    LaunchedEffect(timerEndTime, timerRemaining) {
+        while(true) {
+            if (timerEndTime > 0L) {
+                val rem = timerEndTime - System.currentTimeMillis()
+                localRemainingTime = if (rem > 0) rem else 0L
+            } else {
+                localRemainingTime = timerRemaining
+            }
+            delay(1000)
+        }
+    }
+
+    // Observe player state
+    LaunchedEffect(activity.mediaController) {
         while (true) {
-            if (isBound && service != null) {
-                isPlaying = service.isPlaying()
-                remainingTimeMillis = service.getSleepRemainingMillis()
-                totalTimeMillis = service.getSleepTotalMillis()
-                isTimerRunning = service.isSleepTimerRunning()
+            val controller = activity.mediaController
+            if (controller != null) {
+                isPlaying = controller.isPlaying
             }
             delay(500)
         }
@@ -173,24 +175,14 @@ fun MainAppScreen(isBound: Boolean, service: NoiseService?, dataStore: SettingsD
             return
         }
         
-        if (isPlaying) {
-            service?.stopPlayback()
-        } else {
-            val startIntent = Intent(context, NoiseService::class.java)
-            ContextCompat.startForegroundService(context, startIntent)
-            
-            // Apply all current states before starting
-            service?.setVolume(volume)
-            service?.setNoiseType(noiseType)
-            service?.setBalance(balance)
-            service?.setSleepTimer(initialSleepTimer)
-            if (initialSleepTimer > 0) {
-                service?.startSleepTimer()
+        val controller = activity.mediaController
+        if (controller != null) {
+            if (controller.isPlaying) {
+                controller.pause()
+            } else {
+                controller.play()
             }
-            
-            service?.startPlayback()
         }
-        isPlaying = service?.isPlaying() == true
     }
 
     var selectedTab by remember { mutableIntStateOf(0) }
@@ -234,10 +226,7 @@ fun MainAppScreen(isBound: Boolean, service: NoiseService?, dataStore: SettingsD
                 currentType = noiseType,
                 onTypeSelected = { newType ->
                     noiseType = newType
-                    service?.setNoiseType(newType)
-                    coroutineScope.launch {
-                        dataStore.saveNoiseType(newType)
-                    }
+                    coroutineScope.launch { dataStore.saveNoiseType(newType) }
                 }
             )
         } else {
@@ -246,25 +235,33 @@ fun MainAppScreen(isBound: Boolean, service: NoiseService?, dataStore: SettingsD
                 volume = volume,
                 onVolumeChanged = {
                     volume = it
-                    service?.setVolume(it)
                     coroutineScope.launch { dataStore.saveVolume(it) }
                 },
                 balance = balance,
                 onBalanceChanged = {
                     balance = it
-                    service?.setBalance(it)
                     coroutineScope.launch { dataStore.saveBalance(it) }
                 },
                 sleepTimer = initialSleepTimer,
                 onSleepTimerChanged = {
                     coroutineScope.launch { dataStore.saveSleepTimer(it) }
-                    service?.setSleepTimer(it)
                 },
-                isTimerRunning = isTimerRunning,
-                onStartTimer = { service?.startSleepTimer() },
-                onPauseTimer = { service?.pauseSleepTimer() },
-                remainingTimeMillis = remainingTimeMillis,
-                totalTimeMillis = totalTimeMillis,
+                isTimerRunning = timerEndTime > 0L,
+                onStartTimer = {
+                    val totalMillis = if (timerRemaining > 0L) timerRemaining else initialSleepTimer * 60000L
+                    coroutineScope.launch {
+                        dataStore.saveTimerRemaining(0L)
+                        dataStore.saveTimerEndTime(System.currentTimeMillis() + totalMillis)
+                    }
+                },
+                onPauseTimer = {
+                    coroutineScope.launch {
+                        dataStore.saveTimerRemaining(localRemainingTime)
+                        dataStore.saveTimerEndTime(0L)
+                    }
+                },
+                remainingTimeMillis = localRemainingTime,
+                totalTimeMillis = initialSleepTimer * 60000L,
                 themeMode = initialThemeMode,
                 onThemeModeChanged = {
                     coroutineScope.launch { dataStore.saveThemeMode(it) }
@@ -298,7 +295,9 @@ fun SoundsScreen(innerPadding: PaddingValues, currentType: NoiseType, onTypeSele
         modifier = Modifier.fillMaxSize(),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        items(noises) { (type, name) ->
+        items(noises) { pair ->
+            val type = pair.first
+            val name = pair.second
             NoiseCard(
                 name = name,
                 isSelected = type == currentType,
@@ -315,7 +314,7 @@ fun NoiseCard(name: String, isSelected: Boolean, onClick: () -> Unit) {
     val contentColor = if (isSelected) MaterialTheme.colorScheme.onSecondaryContainer else MaterialTheme.colorScheme.onSurface
     val borderColor = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant
 
-    androidx.compose.material3.OutlinedCard(
+    OutlinedCard(
         onClick = onClick,
         modifier = Modifier
             .widthIn(max = 600.dp)
@@ -360,8 +359,6 @@ fun NoiseCard(name: String, isSelected: Boolean, onClick: () -> Unit) {
     }
 }
 
-
-
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsScreen(
@@ -382,7 +379,6 @@ fun SettingsScreen(
                 bottom = innerPadding.calculateBottomPadding()
             )
     ) {
-        // 音频控制模块
         Text(
             text = "音频控制",
             style = MaterialTheme.typography.labelLarge,
@@ -407,14 +403,14 @@ fun SettingsScreen(
             labels = listOf("偏左", "居中", "偏右")
         )
         
-        HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+        HorizontalDivider(modifier = Modifier.padding(vertical = 16.dp))
 
         // 定时关闭模块
         Text(
             text = "定时关闭",
             style = MaterialTheme.typography.labelLarge,
             color = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.padding(start = 16.dp, top = 16.dp, bottom = 8.dp)
+            modifier = Modifier.padding(start = 16.dp, top = 8.dp, bottom = 8.dp)
         )
         
         Column(modifier = Modifier.padding(horizontal = 16.dp)) {
@@ -455,8 +451,9 @@ fun SettingsScreen(
                 }
             }
 
-            if (totalTimeMillis > 0L) {
-                val progress = if (totalTimeMillis > 0) remainingTimeMillis.toFloat() / totalTimeMillis.toFloat() else 0f
+            if (isTimerRunning || remainingTimeMillis > 0L) {
+                val totalForProgress = if (totalTimeMillis > 0L) totalTimeMillis else remainingTimeMillis
+                val progress = if (totalForProgress > 0) remainingTimeMillis.toFloat() / totalForProgress.toFloat() else 0f
                 val remainingMinutes = remainingTimeMillis / 60000
                 val remainingSeconds = (remainingTimeMillis % 60000) / 1000
                 Spacer(modifier = Modifier.height(16.dp))
@@ -474,7 +471,6 @@ fun SettingsScreen(
 
         HorizontalDivider(modifier = Modifier.padding(vertical = 16.dp))
 
-        // 外观与显示模块
         Text(
             text = "外观与显示",
             style = MaterialTheme.typography.labelLarge,

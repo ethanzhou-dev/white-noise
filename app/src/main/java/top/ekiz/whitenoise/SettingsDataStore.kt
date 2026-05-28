@@ -6,19 +6,27 @@ import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.floatPreferencesKey
 import androidx.datastore.preferences.core.intPreferencesKey
+import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 
+import dagger.hilt.android.qualifiers.ApplicationContext
+import javax.inject.Inject
+import javax.inject.Singleton
+
 val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = "settings")
 
-class SettingsDataStore(private val context: Context) {
+@Singleton
+class SettingsDataStore @Inject constructor(@ApplicationContext private val context: Context) {
 
     companion object {
         val VOLUME_KEY = floatPreferencesKey("volume")
         val NOISE_TYPE_KEY = stringPreferencesKey("noise_type")
         val SLEEP_TIMER_KEY = intPreferencesKey("sleep_timer")
+        val TIMER_END_TIME_KEY = longPreferencesKey("timer_end_time")
+        val TIMER_REMAINING_KEY = longPreferencesKey("timer_remaining")
         val BALANCE_KEY = floatPreferencesKey("balance")
         val THEME_MODE_KEY = stringPreferencesKey("theme_mode")
     }
@@ -41,6 +49,12 @@ class SettingsDataStore(private val context: Context) {
     val sleepTimerFlow: Flow<Int> = context.dataStore.data
         .map { preferences -> preferences[SLEEP_TIMER_KEY] ?: 0 }
 
+    val timerEndTimeFlow: Flow<Long> = context.dataStore.data
+        .map { preferences -> preferences[TIMER_END_TIME_KEY] ?: 0L }
+
+    val timerRemainingFlow: Flow<Long> = context.dataStore.data
+        .map { preferences -> preferences[TIMER_REMAINING_KEY] ?: 0L }
+
     val balanceFlow: Flow<Float> = context.dataStore.data
         .map { preferences -> preferences[BALANCE_KEY] ?: 0f }
 
@@ -61,6 +75,14 @@ class SettingsDataStore(private val context: Context) {
 
     suspend fun saveSleepTimer(minutes: Int) {
         context.dataStore.edit { preferences -> preferences[SLEEP_TIMER_KEY] = minutes }
+    }
+
+    suspend fun saveTimerEndTime(millis: Long) {
+        context.dataStore.edit { preferences -> preferences[TIMER_END_TIME_KEY] = millis }
+    }
+
+    suspend fun saveTimerRemaining(millis: Long) {
+        context.dataStore.edit { preferences -> preferences[TIMER_REMAINING_KEY] = millis }
     }
 
     suspend fun saveBalance(balance: Float) {

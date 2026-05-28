@@ -1,275 +1,168 @@
 package top.ekiz.whitenoise
 
-import android.app.Notification
-import android.app.NotificationChannel
-import android.app.NotificationManager
-import android.app.PendingIntent
-import android.app.Service
-import android.content.Context
-import android.content.Intent
-import android.media.AudioFocusRequest
-import android.media.AudioManager
-import android.os.Binder
-import android.os.Build
-import android.os.IBinder
-import androidx.core.app.NotificationCompat
+import androidx.media3.common.AudioAttributes
+import androidx.media3.common.C
+import androidx.media3.exoplayer.DefaultRenderersFactory
+import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.audio.AudioSink
+import androidx.media3.exoplayer.audio.DefaultAudioSink
+import androidx.media3.exoplayer.source.SilenceMediaSource
+import androidx.media3.session.MediaSession
+import androidx.media3.session.MediaSessionService
+import dagger.hilt.android.AndroidEntryPoint
+import top.ekiz.whitenoise.audio.NoiseAudioProcessor
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.isActive
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.cancel
+import android.media.AudioManager
+import javax.inject.Inject
 
-class NoiseService : Service() {
+@AndroidEntryPoint
+class NoiseService : MediaSessionService() {
 
-    private val binder = LocalBinder()
-    private val generator = NoiseGenerator()
-    private val serviceScope = CoroutineScope(Dispatchers.Main)
-    private var sleepTimerJob: Job? = null
+    @Inject lateinit var settingsDataStore: SettingsDataStore
+
+    private var mediaSession: MediaSession? = null
+    lateinit var player: ExoPlayer
+    val noiseProcessor = NoiseAudioProcessor()
     
-    private var sleepEndTimeMillis: Long = 0L
-    private var sleepTotalTimeMillis: Long = 0L
-    private var sleepRemainingPausedMillis: Long = 0L
-    private var isSleepTimerPaused: Boolean = false
-    
+    private val serviceScope = CoroutineScope(Dispatchers.Main + SupervisorJob())
     private lateinit var audioManager: AudioManager
-    private var isPausedByCall = false
     private var modeListener: Any? = null
-
-    companion object {
-        const val CHANNEL_ID = "WhiteNoiseChannel"
-        const val NOTIFICATION_ID = 1
-        const val ACTION_STOP = "top.ekiz.whitenoise.ACTION_STOP"
-    }
-
-    inner class LocalBinder : Binder() {
-        fun getService(): NoiseService = this@NoiseService
-    }
+    private var isPausedByCall = false
 
     override fun onCreate() {
         super.onCreate()
-        createNotificationChannel()
-        audioManager = getSystemService(Context.AUDIO_SERVICE) as AudioManager
-    }
 
-    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        if (intent?.action == ACTION_STOP) {
-            stopPlayback()
+        val renderersFactory = object : DefaultRenderersFactory(this) {
+            override fun buildAudioSink(
+                context: android.content.Context,
+                enableFloatOutput: Boolean,
+                enableAudioTrackPlaybackParams: Boolean
+            ): AudioSink? {
+                return DefaultAudioSink.Builder(context)
+                    .setAudioProcessors(arrayOf(noiseProcessor))
+                    .build()
+            }
         }
-        return START_NOT_STICKY
-    }
 
-    override fun onBind(intent: Intent): IBinder {
-        return binder
-    }
+        player = ExoPlayer.Builder(this, renderersFactory)
+            .setAudioAttributes(
+                AudioAttributes.Builder()
+                    .setContentType(C.AUDIO_CONTENT_TYPE_MUSIC)
+                    .setUsage(C.USAGE_MEDIA)
+                    .build(),
+                false // handleAudioFocus = false (智能混音)
+            )
+            .build()
 
-    fun startPlayback() {
-        isPausedByCall = false
-        generator.start()
-        startForeground(NOTIFICATION_ID, createNotification())
+        mediaSession = MediaSession.Builder(this, player).build()
+
+        // 365 days of silence in microseconds, practically infinite.
+        // Some versions of SilenceMediaSource don't like C.TIME_UNSET, so we use a huge duration.
+        val durationUs = 365L * 24 * 60 * 60 * 1000 * 1000
+        val silenceSource = SilenceMediaSource(durationUs)
+        
+        player.setMediaSource(silenceSource)
+        player.prepare()
+        
+        serviceScope.launch {
+            settingsDataStore.volumeFlow.collect { volume ->
+                noiseProcessor.volume = volume
+            }
+        }
+        
+        serviceScope.launch {
+            settingsDataStore.noiseTypeFlow.collect { type ->
+                noiseProcessor.noiseType = type
+            }
+        }
+        
+        serviceScope.launch {
+            settingsDataStore.balanceFlow.collect { balance ->
+                noiseProcessor.balance = balance
+            }
+        }
+
+        // Sleep Timer Logic
+        serviceScope.launch {
+            settingsDataStore.timerEndTimeFlow.collectLatest { endTime ->
+                if (endTime > 0L) {
+                    val remaining = endTime - System.currentTimeMillis()
+                    if (remaining > 0) {
+                        if (remaining > 60000L) {
+                            delay(remaining - 60000L) // Wait until last 60 seconds
+                        }
+                        // Start fade out in the last minute
+                        noiseProcessor.fadeOut(60000L)
+                        val finalWait = endTime - System.currentTimeMillis()
+                        if (finalWait > 0) delay(finalWait)
+                        
+                        player.pause()
+                        noiseProcessor.fadeIn(100L) // reset fade for next time
+                        settingsDataStore.saveTimerEndTime(0L)
+                        settingsDataStore.saveTimerRemaining(0L)
+                    } else {
+                        player.pause()
+                        settingsDataStore.saveTimerEndTime(0L)
+                    }
+                }
+            }
+        }
+
         startCallMonitor()
     }
 
-    fun stopPlayback() {
-        generator.cancelSleepFadeOut()
-        generator.stop()
-        stopCallMonitor()
-        sleepTimerJob?.cancel()
-        sleepEndTimeMillis = 0L
-        sleepTotalTimeMillis = 0L
-        sleepRemainingPausedMillis = 0L
-        isSleepTimerPaused = false
-        stopForeground(STOP_FOREGROUND_REMOVE)
-        stopSelf()
-    }
-
-    fun setVolume(vol: Float) {
-        generator.volume = vol
-    }
-
-    fun setBalance(balance: Float) {
-        generator.balance = balance
-    }
-
-    fun setNoiseType(type: NoiseType) {
-        generator.noiseType = type
-    }
-
-    fun setSleepTimer(minutes: Int) {
-        sleepTimerJob?.cancel()
-        generator.cancelSleepFadeOut()
-        if (minutes > 0) {
-            sleepTotalTimeMillis = minutes * 60 * 1000L
-            sleepRemainingPausedMillis = sleepTotalTimeMillis
-            isSleepTimerPaused = true
-            sleepEndTimeMillis = 0L
-        } else {
-            sleepEndTimeMillis = 0L
-            sleepTotalTimeMillis = 0L
-            sleepRemainingPausedMillis = 0L
-            isSleepTimerPaused = false
-        }
-    }
-    
-    fun startSleepTimer() {
-        if (isSleepTimerPaused && sleepRemainingPausedMillis > 0) {
-            sleepEndTimeMillis = System.currentTimeMillis() + sleepRemainingPausedMillis
-            isSleepTimerPaused = false
-            sleepTimerJob?.cancel()
-            sleepTimerJob = serviceScope.launch {
-                val fadeDuration = 60_000L
-                if (sleepRemainingPausedMillis > fadeDuration) {
-                    delay(sleepRemainingPausedMillis - fadeDuration)
-                    generator.startSleepFadeOut(fadeDuration)
-                    delay(fadeDuration)
-                } else {
-                    generator.startSleepFadeOut(sleepRemainingPausedMillis)
-                    delay(sleepRemainingPausedMillis)
-                }
-                if (isPlaying()) {
-                    stopPlayback()
-                }
-                sleepEndTimeMillis = 0L
-                sleepTotalTimeMillis = 0L
-                sleepRemainingPausedMillis = 0L
-                isSleepTimerPaused = false
+    private fun startCallMonitor() {
+        audioManager = getSystemService(android.content.Context.AUDIO_SERVICE) as AudioManager
+        if (modeListener == null) {
+            modeListener = AudioManager.OnModeChangedListener { mode ->
+                val isCallActive = mode == AudioManager.MODE_IN_CALL || 
+                                   mode == AudioManager.MODE_RINGTONE || 
+                                   mode == AudioManager.MODE_IN_COMMUNICATION
+                handleCallState(isCallActive)
             }
+            audioManager.addOnModeChangedListener(mainExecutor, modeListener as AudioManager.OnModeChangedListener)
         }
-    }
-    
-    fun pauseSleepTimer() {
-        if (sleepEndTimeMillis > 0L && !isSleepTimerPaused) {
-            sleepTimerJob?.cancel()
-            generator.cancelSleepFadeOut()
-            sleepRemainingPausedMillis = maxOf(0L, sleepEndTimeMillis - System.currentTimeMillis())
-            isSleepTimerPaused = true
-            sleepEndTimeMillis = 0L
-        }
-    }
-    
-    fun isSleepTimerRunning(): Boolean {
-        return sleepEndTimeMillis > 0L && !isSleepTimerPaused
-    }
-    
-    fun getSleepRemainingMillis(): Long {
-        return if (isSleepTimerPaused) {
-            sleepRemainingPausedMillis
-        } else if (sleepEndTimeMillis > 0L) {
-            maxOf(0L, sleepEndTimeMillis - System.currentTimeMillis())
-        } else {
-            0L
-        }
-    }
-    
-    fun getSleepTotalMillis(): Long {
-        return sleepTotalTimeMillis
-    }
-    
-    fun isPlaying(): Boolean {
-        return generator.isPlaying
     }
 
     private fun handleCallState(isCallActive: Boolean) {
         if (isCallActive) {
-            if (isPlaying()) {
-                isPausedByCall = true
-                generator.stop()
+            if (player.isPlaying) {
+                noiseProcessor.fadeOut(500L)
+                serviceScope.launch {
+                    delay(500L)
+                    player.pause()
+                    isPausedByCall = true
+                }
             }
         } else {
             if (isPausedByCall) {
+                noiseProcessor.fadeIn(1000L)
+                player.play()
                 isPausedByCall = false
-                generator.start()
             }
         }
     }
 
-    private var callMonitorJob: Job? = null
-
-    private fun startCallMonitor() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            if (modeListener == null) {
-                modeListener = AudioManager.OnModeChangedListener { mode ->
-                    val isCallActive = mode == AudioManager.MODE_IN_CALL || 
-                                       mode == AudioManager.MODE_RINGTONE || 
-                                       mode == AudioManager.MODE_IN_COMMUNICATION
-                    handleCallState(isCallActive)
-                }
-                audioManager.addOnModeChangedListener(mainExecutor, modeListener as AudioManager.OnModeChangedListener)
-                // Initialize state
-                val mode = audioManager.mode
-                handleCallState(mode == AudioManager.MODE_IN_CALL || 
-                                mode == AudioManager.MODE_RINGTONE || 
-                                mode == AudioManager.MODE_IN_COMMUNICATION)
-            }
-        } else {
-            if (callMonitorJob?.isActive == true) return
-            callMonitorJob = serviceScope.launch {
-                while (isActive) {
-                    val mode = audioManager.mode
-                    val isCallActive = mode == AudioManager.MODE_IN_CALL || 
-                                       mode == AudioManager.MODE_RINGTONE || 
-                                       mode == AudioManager.MODE_IN_COMMUNICATION
-                    handleCallState(isCallActive)
-                    delay(500)
-                }
-            }
-        }
-    }
-
-    private fun stopCallMonitor() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            modeListener?.let {
-                audioManager.removeOnModeChangedListener(it as AudioManager.OnModeChangedListener)
-                modeListener = null
-            }
-        } else {
-            callMonitorJob?.cancel()
-            callMonitorJob = null
-        }
+    override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaSession? {
+        return mediaSession
     }
 
     override fun onDestroy() {
-        generator.stop()
-        sleepTimerJob?.cancel()
-        stopCallMonitor()
+        if (modeListener != null) {
+            audioManager.removeOnModeChangedListener(modeListener as AudioManager.OnModeChangedListener)
+        }
+        mediaSession?.run {
+            player.release()
+            release()
+            mediaSession = null
+        }
+        serviceScope.cancel()
         super.onDestroy()
-    }
-
-    private fun createNotificationChannel() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val channel = NotificationChannel(
-                CHANNEL_ID,
-                "Playback",
-                NotificationManager.IMPORTANCE_LOW
-            ).apply {
-                description = "Shows playback controls for White Noise"
-            }
-            val manager = getSystemService(NotificationManager::class.java)
-            manager.createNotificationChannel(channel)
-        }
-    }
-
-    private fun createNotification(): Notification {
-        val stopIntent = Intent(this, NoiseService::class.java).apply {
-            action = ACTION_STOP
-        }
-        val stopPendingIntent = PendingIntent.getService(
-            this, 0, stopIntent, PendingIntent.FLAG_IMMUTABLE
-        )
-
-        val mainIntent = Intent(this, MainActivity::class.java)
-        val mainPendingIntent = PendingIntent.getActivity(
-            this, 0, mainIntent, PendingIntent.FLAG_IMMUTABLE
-        )
-
-        return NotificationCompat.Builder(this, CHANNEL_ID)
-            .setContentTitle("白噪音")
-            .setContentText("正在播放...")
-            .setSmallIcon(android.R.drawable.ic_media_play)
-            .setContentIntent(mainPendingIntent)
-            .addAction(android.R.drawable.ic_media_pause, "Stop", stopPendingIntent)
-            .setOngoing(true)
-            .setPriority(NotificationCompat.PRIORITY_LOW)
-            .build()
     }
 }
