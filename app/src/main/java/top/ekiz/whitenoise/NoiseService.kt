@@ -192,8 +192,8 @@ class NoiseService : Service() {
                 }
             }
             AudioManager.AUDIOFOCUS_LOSS -> {
-                isPausedByFocusLoss = false
-                stopPlayback()
+                // 用户希望与其他媒体（音乐/视频）混音，所以这里我们忽略永久焦点丢失，不停止播放
+                // 注意：这会导致系统焦点转移给音乐/视频 App。当其他 App 结束后，如果来通知，我们将无法触发 Ducking，直到用户重新播放。
             }
         }
     }
