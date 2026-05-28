@@ -10,6 +10,7 @@ import android.os.Build
 import android.os.Bundle
 import android.os.IBinder
 import androidx.activity.ComponentActivity
+import androidx.activity.enableEdgeToEdge
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
@@ -23,6 +24,10 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.VolumeUp
+import androidx.compose.material.icons.filled.Headset
+import androidx.compose.material.icons.filled.SurroundSound
+
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
@@ -81,6 +86,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        enableEdgeToEdge()
         val dataStore = SettingsDataStore(this)
         
         setContent {
@@ -209,22 +215,17 @@ fun MainAppScreen(isBound: Boolean, service: NoiseService?, dataStore: SettingsD
             Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(if (selectedTab == 0) "白噪音" else "设置", fontWeight = FontWeight.Bold) },
+                title = { Text(if (selectedTab == 0) "白噪音" else "设置") },
                 actions = {
                     if (selectedTab == 0) {
                         IconButton(onClick = { onPlayPauseClicked() }) {
                             Icon(
                                 imageVector = if (isPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow,
-                                contentDescription = if (isPlaying) "暂停" else "播放",
-                                tint = MaterialTheme.colorScheme.primary
+                                contentDescription = if (isPlaying) "暂停" else "播放"
                             )
                         }
                     }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surface,
-                    titleContentColor = MaterialTheme.colorScheme.primary,
-                )
+                }
             )
         },
         bottomBar = {
@@ -244,9 +245,9 @@ fun MainAppScreen(isBound: Boolean, service: NoiseService?, dataStore: SettingsD
             }
         }
         ) { paddingValues ->
-        Box(modifier = Modifier.padding(paddingValues).fillMaxSize()) {
             if (selectedTab == 0) {
                 SoundsScreen(
+                    innerPadding = paddingValues,
                     currentType = noiseType,
                     onTypeSelected = { newType ->
                         noiseType = newType
@@ -258,6 +259,7 @@ fun MainAppScreen(isBound: Boolean, service: NoiseService?, dataStore: SettingsD
                 )
             } else {
                 SettingsScreen(
+                    innerPadding = paddingValues,
                     volume = volume,
                     onVolumeChanged = {
                         volume = it
@@ -294,12 +296,11 @@ fun MainAppScreen(isBound: Boolean, service: NoiseService?, dataStore: SettingsD
             }
         }
         }
-        }
     }
 }
 
 @Composable
-fun SoundsScreen(currentType: NoiseType, onTypeSelected: (NoiseType) -> Unit) {
+fun SoundsScreen(innerPadding: PaddingValues, currentType: NoiseType, onTypeSelected: (NoiseType) -> Unit) {
     val noises = listOf(
         Pair(NoiseType.WHITE, "白噪音"),
         Pair(NoiseType.PINK, "粉噪音"),
@@ -309,7 +310,12 @@ fun SoundsScreen(currentType: NoiseType, onTypeSelected: (NoiseType) -> Unit) {
     )
 
     LazyColumn(
-        contentPadding = PaddingValues(16.dp),
+        contentPadding = PaddingValues(
+            start = 16.dp,
+            end = 16.dp,
+            top = innerPadding.calculateTopPadding() + 16.dp,
+            bottom = innerPadding.calculateBottomPadding() + 16.dp
+        ),
         verticalArrangement = Arrangement.spacedBy(16.dp),
         modifier = Modifier.fillMaxSize(),
         horizontalAlignment = Alignment.CenterHorizontally
@@ -324,31 +330,32 @@ fun SoundsScreen(currentType: NoiseType, onTypeSelected: (NoiseType) -> Unit) {
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun NoiseCard(name: String, isSelected: Boolean, onClick: () -> Unit) {
     val containerColor = if (isSelected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant
     val contentColor = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant
 
     Card(
+        onClick = onClick,
         modifier = Modifier
             .widthIn(max = 400.dp)
-            .fillMaxWidth()
-            .height(64.dp),
-        shape = RoundedCornerShape(24.dp),
-        colors = CardDefaults.cardColors(containerColor = containerColor),
-        elevation = CardDefaults.cardElevation(defaultElevation = if (isSelected) 8.dp else 2.dp)
+            .fillMaxWidth(),
+        shape = MaterialTheme.shapes.large,
+        colors = CardDefaults.cardColors(
+            containerColor = containerColor,
+            contentColor = contentColor
+        )
     ) {
         Box(
             modifier = Modifier
-                .fillMaxSize()
-                .clickable { onClick() },
+                .fillMaxWidth()
+                .padding(vertical = 20.dp),
             contentAlignment = Alignment.Center
         ) {
             Text(
                 text = name,
-                style = MaterialTheme.typography.titleLarge,
-                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                color = contentColor
+                style = MaterialTheme.typography.titleMedium
             )
         }
     }
@@ -373,16 +380,12 @@ fun PlaybackScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("正在播放", fontWeight = FontWeight.Bold) },
+                title = { Text("正在播放") },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.Filled.ArrowBack, contentDescription = "返回")
                     }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surface,
-                    titleContentColor = MaterialTheme.colorScheme.primary,
-                )
+                }
             )
         }
     ) { paddingValues ->
@@ -396,7 +399,6 @@ fun PlaybackScreen(
             Text(
                 text = noiseName,
                 style = MaterialTheme.typography.displayMedium,
-                fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.primary
             )
             Spacer(modifier = Modifier.height(64.dp))
@@ -407,8 +409,7 @@ fun PlaybackScreen(
             ) {
                 Text(
                     text = if (isPlaying) "暂停" else "播放",
-                    style = MaterialTheme.typography.headlineSmall,
-                    fontWeight = FontWeight.Bold
+                    style = MaterialTheme.typography.titleLarge
                 )
             }
         }
@@ -418,6 +419,7 @@ fun PlaybackScreen(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsScreen(
+    innerPadding: PaddingValues,
     volume: Float, onVolumeChanged: (Float) -> Unit,
     balance: Float, onBalanceChanged: (Float) -> Unit,
     stereoWidth: Float, onStereoWidthChanged: (Float) -> Unit,
@@ -430,19 +432,56 @@ fun SettingsScreen(
         modifier = Modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
-            .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(24.dp)
+            .padding(
+                top = innerPadding.calculateTopPadding(),
+                bottom = innerPadding.calculateBottomPadding()
+            )
     ) {
-        // Volume
-        SettingSection(title = "音量大小") {
-            Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-                Box(modifier = Modifier.width(2.dp).height(12.dp).background(MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)))
-                Slider(value = volume, onValueChange = onVolumeChanged, valueRange = 0f..1f, steps = 9, modifier = Modifier.fillMaxWidth())
-            }
-        }
+        // 音频控制模块
+        Text(
+            text = "音频控制",
+            style = MaterialTheme.typography.labelLarge,
+            color = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.padding(start = 16.dp, top = 24.dp, bottom = 8.dp)
+        )
+        
+        SliderSettingRow(
+            icon = Icons.Filled.VolumeUp,
+            contentDescription = "音量大小",
+            value = volume,
+            onValueChange = onVolumeChanged,
+            valueRange = 0f..1f
+        )
+        
+        SliderSettingRow(
+            icon = Icons.Filled.Headset,
+            contentDescription = "左右耳平衡",
+            value = balance,
+            onValueChange = onBalanceChanged,
+            valueRange = -1f..1f,
+            labels = listOf("偏左", "居中", "偏右")
+        )
+        
+        SliderSettingRow(
+            icon = Icons.Filled.SurroundSound,
+            contentDescription = "立体声宽度",
+            value = stereoWidth,
+            onValueChange = onStereoWidthChanged,
+            valueRange = 0f..1f,
+            labels = listOf("单声道", "全立体")
+        )
 
-        // Sleep Timer
-        SettingSection(title = "定时关闭") {
+        HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+
+        // 定时关闭模块
+        Text(
+            text = "定时关闭",
+            style = MaterialTheme.typography.labelLarge,
+            color = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.padding(start = 16.dp, top = 16.dp, bottom = 8.dp)
+        )
+        
+        Column(modifier = Modifier.padding(horizontal = 16.dp)) {
             var customMinutesInput by remember(sleepTimer) { mutableStateOf(if (sleepTimer > 0) sleepTimer.toString() else "") }
             
             OutlinedTextField(
@@ -453,7 +492,7 @@ fun SettingsScreen(
                     val minutes = filtered.toIntOrNull() ?: 0
                     onSleepTimerChanged(minutes)
                 },
-                label = { Text("定时关闭 (分钟)") },
+                label = { Text("定时关闭时长") },
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                 modifier = Modifier.fillMaxWidth(),
                 trailingIcon = { Text("分钟", modifier = Modifier.padding(end = 16.dp)) },
@@ -462,17 +501,19 @@ fun SettingsScreen(
             
             Row(
                 modifier = Modifier.fillMaxWidth().padding(top = 16.dp),
-                horizontalArrangement = Arrangement.SpaceEvenly
+                horizontalArrangement = Arrangement.spacedBy(16.dp)
             ) {
                 Button(
                     onClick = onStartTimer,
-                    enabled = !isTimerRunning && (sleepTimer > 0)
+                    enabled = !isTimerRunning && (sleepTimer > 0),
+                    modifier = Modifier.weight(1f)
                 ) {
                     Text("开始")
                 }
                 OutlinedButton(
                     onClick = onPauseTimer,
-                    enabled = isTimerRunning
+                    enabled = isTimerRunning,
+                    modifier = Modifier.weight(1f)
                 ) {
                     Text("暂停")
                 }
@@ -484,83 +525,87 @@ fun SettingsScreen(
                 val remainingSeconds = (remainingTimeMillis % 60000) / 1000
                 Spacer(modifier = Modifier.height(16.dp))
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                    Text("剩余时间: ${"%02d:%02d".format(remainingMinutes, remainingSeconds)}", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
-                    Text("${(progress * 100).toInt()}%", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
+                    Text("剩余时间: ${"%02d:%02d".format(remainingMinutes, remainingSeconds)}", style = MaterialTheme.typography.bodyMedium)
+                    Text("${(progress * 100).toInt()}%", style = MaterialTheme.typography.bodyMedium)
                 }
                 LinearProgressIndicator(
                     progress = progress,
-                    modifier = Modifier.fillMaxWidth().padding(top = 8.dp).height(8.dp),
-                    trackColor = MaterialTheme.colorScheme.surfaceVariant,
-                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
                     strokeCap = StrokeCap.Round
                 )
             }
         }
 
-        // Balance
-        SettingSection(title = "左右耳平衡") {
-            Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-                Box(modifier = Modifier.width(2.dp).height(12.dp).background(MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)))
-                Slider(value = balance, onValueChange = onBalanceChanged, valueRange = -1f..1f, steps = 9, modifier = Modifier.fillMaxWidth())
-            }
-            Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp), horizontalArrangement = Arrangement.SpaceBetween) {
-                Text("偏左", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                Text("居中", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                Text("偏右", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-        }
+        HorizontalDivider(modifier = Modifier.padding(vertical = 16.dp))
 
-        // Stereo Width
-        SettingSection(title = "立体声宽度") {
-            Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-                Box(modifier = Modifier.width(2.dp).height(12.dp).background(MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)))
-                Slider(value = stereoWidth, onValueChange = onStereoWidthChanged, valueRange = 0f..1f, steps = 9, modifier = Modifier.fillMaxWidth())
-            }
-            Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp), horizontalArrangement = Arrangement.SpaceBetween) {
-                Text("单声道", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                Text("全立体", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-        }
-
-        // Theme Mode
-        SettingSection(title = "外观主题") {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceEvenly
-            ) {
-                listOf("System" to "跟随系统", "Light" to "浅色", "Dark" to "深色").forEach { (mode, label) ->
-                    FilterChip(
+        // 外观与显示模块
+        Text(
+            text = "外观与显示",
+            style = MaterialTheme.typography.labelLarge,
+            color = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.padding(start = 16.dp, top = 8.dp, bottom = 16.dp)
+        )
+        
+        Box(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp), contentAlignment = Alignment.Center) {
+            val options = listOf("System" to "跟随系统", "Light" to "浅色", "Dark" to "深色")
+            SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+                options.forEachIndexed { index, (mode, label) ->
+                    SegmentedButton(
                         selected = themeMode == mode,
                         onClick = { onThemeModeChanged(mode) },
-                        label = { Text(label) }
-                    )
+                        shape = SegmentedButtonDefaults.itemShape(index = index, count = options.size)
+                    ) {
+                        Text(label)
+                    }
                 }
             }
         }
         
-        Spacer(modifier = Modifier.height(88.dp)) // padding for FAB
+        Spacer(modifier = Modifier.height(32.dp))
     }
 }
 
 @Composable
-fun SettingSection(title: String, content: @Composable () -> Unit) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)),
-        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
-    ) {
-        Column(
-            modifier = Modifier.padding(16.dp)
-        ) {
-            Text(
-                text = title, 
-                style = MaterialTheme.typography.titleMedium, 
-                color = MaterialTheme.colorScheme.primary,
-                fontWeight = FontWeight.Bold,
-                modifier = Modifier.padding(bottom = 12.dp)
+fun SliderSettingRow(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    contentDescription: String,
+    value: Float,
+    onValueChange: (Float) -> Unit,
+    valueRange: ClosedFloatingPointRange<Float>,
+    labels: List<String>? = null
+) {
+    ListItem(
+        headlineContent = { Text(contentDescription) },
+        leadingContent = {
+            Icon(
+                imageVector = icon,
+                contentDescription = contentDescription
             )
-            content()
+        },
+        supportingContent = {
+            Column(modifier = Modifier.padding(top = 8.dp)) {
+                Slider(
+                    value = value,
+                    onValueChange = onValueChange,
+                    valueRange = valueRange,
+                    steps = 9,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                if (labels != null) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        labels.forEach { label ->
+                            Text(
+                                text = label,
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                }
+            }
         }
-    }
+    )
 }

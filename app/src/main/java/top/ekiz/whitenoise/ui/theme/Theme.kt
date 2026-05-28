@@ -40,6 +40,7 @@ fun WhiteNoiseTheme(
 
     MaterialTheme(
         colorScheme = colorScheme,
+        typography = Typography,
         content = content
     )
 }
