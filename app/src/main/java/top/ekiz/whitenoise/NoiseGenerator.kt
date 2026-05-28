@@ -31,6 +31,12 @@ class NoiseGenerator {
     var volume: Float = 0.5f // 0.0 to 1.0
 
     @Volatile
+    var balance: Float = 0f // -1.0 to 1.0
+
+    @Volatile
+    var stereoWidth: Float = 1f // 0.0 to 1.0
+
+    @Volatile
     var noiseType: NoiseType = NoiseType.WHITE
 
     @Volatile
@@ -90,8 +96,12 @@ class NoiseGenerator {
             while (isActive && isPlaying) {
                 val currentVolume = volume
                 val currentNoiseType = noiseType
+                val currentBalance = balance
+                val currentStereoWidth = stereoWidth
 
-                if (currentNoiseType == NoiseType.WHITE) {
+                val isDefaultPan = currentBalance == 0f && currentStereoWidth == 1f
+
+                if (currentNoiseType == NoiseType.WHITE && isDefaultPan) {
                     val maxAmplitude = (Short.MAX_VALUE * currentVolume).toInt()
                     val until = maxAmplitude + 1
                     val from = -maxAmplitude
@@ -100,6 +110,9 @@ class NoiseGenerator {
                         buffer[i + 1] = Random.nextInt(from, until).toShort()
                     }
                 } else {
+                    val leftVol = 1f - currentBalance.coerceAtLeast(0f)
+                    val rightVol = 1f + currentBalance.coerceAtMost(0f)
+
                     for (i in 0 until numShorts step 2) {
                         val whiteL = (Random.nextFloat() * 2f) - 1f
                         val whiteR = (Random.nextFloat() * 2f) - 1f
@@ -151,13 +164,20 @@ class NoiseGenerator {
                         lastWhiteL = whiteL
                         lastWhiteR = whiteR
 
+                        if (currentStereoWidth != 1f) {
+                            val mid = (outputL + outputR) * 0.5f
+                            val side = (outputL - outputR) * 0.5f
+                            outputL = mid + side * currentStereoWidth
+                            outputR = mid - side * currentStereoWidth
+                        }
+
                         if (outputL > 1f) outputL = 1f
                         if (outputL < -1f) outputL = -1f
                         if (outputR > 1f) outputR = 1f
                         if (outputR < -1f) outputR = -1f
 
-                        buffer[i] = (outputL * Short.MAX_VALUE * currentVolume).toInt().toShort()
-                        buffer[i + 1] = (outputR * Short.MAX_VALUE * currentVolume).toInt().toShort()
+                        buffer[i] = (outputL * leftVol * Short.MAX_VALUE * currentVolume).toInt().toShort()
+                        buffer[i + 1] = (outputR * rightVol * Short.MAX_VALUE * currentVolume).toInt().toShort()
                     }
                 }
                 

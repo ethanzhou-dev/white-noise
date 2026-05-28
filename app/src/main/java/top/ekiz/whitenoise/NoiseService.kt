@@ -10,11 +10,21 @@ import android.os.Binder
 import android.os.Build
 import android.os.IBinder
 import androidx.core.app.NotificationCompat
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 class NoiseService : Service() {
 
     private val binder = LocalBinder()
     private val generator = NoiseGenerator()
+    private val serviceScope = CoroutineScope(Dispatchers.Main)
+    private var sleepTimerJob: Job? = null
+    
+    private var sleepEndTimeMillis: Long = 0L
+    private var sleepTotalTimeMillis: Long = 0L
 
     companion object {
         const val CHANNEL_ID = "WhiteNoiseChannel"
@@ -49,6 +59,9 @@ class NoiseService : Service() {
 
     fun stopPlayback() {
         generator.stop()
+        sleepTimerJob?.cancel()
+        sleepEndTimeMillis = 0L
+        sleepTotalTimeMillis = 0L
         stopForeground(STOP_FOREGROUND_REMOVE)
         stopSelf()
     }
@@ -57,8 +70,47 @@ class NoiseService : Service() {
         generator.volume = vol
     }
 
+    fun setBalance(balance: Float) {
+        generator.balance = balance
+    }
+
+    fun setStereoWidth(width: Float) {
+        generator.stereoWidth = width
+    }
+
     fun setNoiseType(type: NoiseType) {
         generator.noiseType = type
+    }
+
+    fun setSleepTimer(minutes: Int) {
+        sleepTimerJob?.cancel()
+        if (minutes > 0) {
+            sleepTotalTimeMillis = minutes * 60 * 1000L
+            sleepEndTimeMillis = System.currentTimeMillis() + sleepTotalTimeMillis
+            sleepTimerJob = serviceScope.launch {
+                delay(sleepTotalTimeMillis)
+                if (isPlaying()) {
+                    stopPlayback()
+                }
+                sleepEndTimeMillis = 0L
+                sleepTotalTimeMillis = 0L
+            }
+        } else {
+            sleepEndTimeMillis = 0L
+            sleepTotalTimeMillis = 0L
+        }
+    }
+    
+    fun getSleepRemainingMillis(): Long {
+        return if (sleepEndTimeMillis > 0L) {
+            maxOf(0L, sleepEndTimeMillis - System.currentTimeMillis())
+        } else {
+            0L
+        }
+    }
+    
+    fun getSleepTotalMillis(): Long {
+        return sleepTotalTimeMillis
     }
     
     fun isPlaying(): Boolean {
@@ -75,6 +127,7 @@ class NoiseService : Service() {
 
     override fun onDestroy() {
         generator.stop()
+        sleepTimerJob?.cancel()
         super.onDestroy()
     }
 
