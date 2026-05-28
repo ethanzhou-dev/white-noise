@@ -288,11 +288,14 @@ fun MainAppScreen(isBound: Boolean, service: NoiseService?, dataStore: SettingsD
 @Composable
 fun SoundsScreen(innerPadding: PaddingValues, currentType: NoiseType, onTypeSelected: (NoiseType) -> Unit) {
     val noises = listOf(
-        Pair(NoiseType.WHITE, "白噪音"),
-        Pair(NoiseType.PINK, "粉噪音"),
+        Pair(NoiseType.BLACK, "黑噪音"),
         Pair(NoiseType.BROWN, "棕噪音"),
+        Pair(NoiseType.PINK, "粉噪音"),
+        Pair(NoiseType.WHITE, "白噪音"),
         Pair(NoiseType.BLUE, "蓝噪音"),
-        Pair(NoiseType.VIOLET, "紫噪音")
+        Pair(NoiseType.VIOLET, "紫噪音"),
+        Pair(NoiseType.GREEN, "绿噪音"),
+        Pair(NoiseType.GREY, "灰噪音")
     )
 
     LazyColumn(

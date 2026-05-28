@@ -11,7 +11,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlin.random.Random
 
 enum class NoiseType {
-    WHITE, PINK, BROWN, BLUE, VIOLET
+    WHITE, PINK, BROWN, BLUE, VIOLET, GREY, GREEN, BLACK
 }
 
 class NoiseGenerator {
@@ -83,6 +83,9 @@ class NoiseGenerator {
             var b4L = 0f
             var b5L = 0f
             var b6L = 0f
+            var lastBlackOutL = 0f
+            var lastGreenL = 0f
+            var lastWhiteLGreen = 0f
             
             // Right state
             var lastBrownOutR = 0f
@@ -94,6 +97,9 @@ class NoiseGenerator {
             var b4R = 0f
             var b5R = 0f
             var b6R = 0f
+            var lastBlackOutR = 0f
+            var lastGreenR = 0f
+            var lastWhiteRGreen = 0f
 
             while (isActive && isPlaying) {
                 val currentVolume = volume
@@ -160,6 +166,41 @@ class NoiseGenerator {
                             NoiseType.VIOLET -> {
                                 outputL = (whiteL - lastWhiteL)
                                 outputR = (whiteR - lastWhiteR)
+                            }
+                            NoiseType.GREY -> {
+                                val currentOutL = (lastBrownOutL + (0.02f * whiteL)) / 1.02f
+                                lastBrownOutL = currentOutL
+                                outputL = (currentOutL * 2.0f) + (whiteL - lastWhiteL) * 0.15f
+                                
+                                val currentOutR = (lastBrownOutR + (0.02f * whiteR)) / 1.02f
+                                lastBrownOutR = currentOutR
+                                outputR = (currentOutR * 2.0f) + (whiteR - lastWhiteR) * 0.15f
+                            }
+                            NoiseType.GREEN -> {
+                                val hpL = whiteL - lastWhiteLGreen
+                                lastWhiteLGreen = whiteL
+                                val lpL = (lastGreenL * 0.95f) + hpL * 0.05f
+                                lastGreenL = lpL
+                                outputL = lpL * 15f
+                                
+                                val hpR = whiteR - lastWhiteRGreen
+                                lastWhiteRGreen = whiteR
+                                val lpR = (lastGreenR * 0.95f) + hpR * 0.05f
+                                lastGreenR = lpR
+                                outputR = lpR * 15f
+                            }
+                            NoiseType.BLACK -> {
+                                val brownL = (lastBrownOutL + (0.02f * whiteL)) / 1.02f
+                                lastBrownOutL = brownL
+                                val blackL = (lastBlackOutL + (0.01f * brownL)) / 1.01f
+                                lastBlackOutL = blackL
+                                outputL = blackL * 10f
+                                
+                                val brownR = (lastBrownOutR + (0.02f * whiteR)) / 1.02f
+                                lastBrownOutR = brownR
+                                val blackR = (lastBlackOutR + (0.01f * brownR)) / 1.01f
+                                lastBlackOutR = blackR
+                                outputR = blackR * 10f
                             }
                             else -> {}
                         }
