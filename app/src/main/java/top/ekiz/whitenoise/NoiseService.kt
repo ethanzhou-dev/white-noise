@@ -17,6 +17,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
 class NoiseService : Service() {
@@ -32,8 +33,8 @@ class NoiseService : Service() {
     private var isSleepTimerPaused: Boolean = false
     
     private lateinit var audioManager: AudioManager
-    private var audioFocusRequest: AudioFocusRequest? = null
-    private var isPausedByFocusLoss = false
+    private var isPausedByCall = false
+    private var modeListener: Any? = null
 
     companion object {
         const val CHANNEL_ID = "WhiteNoiseChannel"
@@ -63,17 +64,16 @@ class NoiseService : Service() {
     }
 
     fun startPlayback() {
-        if (requestAudioFocus()) {
-            isPausedByFocusLoss = false
-            generator.start()
-            startForeground(NOTIFICATION_ID, createNotification())
-        }
+        isPausedByCall = false
+        generator.start()
+        startForeground(NOTIFICATION_ID, createNotification())
+        startCallMonitor()
     }
 
     fun stopPlayback() {
         generator.cancelSleepFadeOut()
         generator.stop()
-        abandonAudioFocus()
+        stopCallMonitor()
         sleepTimerJob?.cancel()
         sleepEndTimeMillis = 0L
         sleepTotalTimeMillis = 0L
@@ -169,69 +169,69 @@ class NoiseService : Service() {
         return generator.isPlaying
     }
 
-    private val audioFocusChangeListener = AudioManager.OnAudioFocusChangeListener { focusChange ->
-        when (focusChange) {
-            AudioManager.AUDIOFOCUS_GAIN -> {
-                if (isPausedByFocusLoss) {
-                    isPausedByFocusLoss = false
-                    startPlayback()
-                }
+    private fun handleCallState(isCallActive: Boolean) {
+        if (isCallActive) {
+            if (isPlaying()) {
+                isPausedByCall = true
+                generator.stop()
             }
-            AudioManager.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK -> {
-                // 通知降低声音的逻辑不需要了，忽略，保持原音量
-            }
-            AudioManager.AUDIOFOCUS_LOSS_TRANSIENT -> {
-                if (isPlaying()) {
-                    isPausedByFocusLoss = true
-                    generator.stop()
-                }
-            }
-            AudioManager.AUDIOFOCUS_LOSS -> {
-                // 用户希望与其他媒体（音乐/视频）混音，所以这里我们忽略永久焦点丢失，不停止播放
-                // 注意：这会导致系统焦点转移给音乐/视频 App。当其他 App 结束后，如果来通知，我们将无法触发 Ducking，直到用户重新播放。
+        } else {
+            if (isPausedByCall) {
+                isPausedByCall = false
+                generator.start()
             }
         }
     }
 
-    private fun requestAudioFocus(): Boolean {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val request = AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN)
-                .setAudioAttributes(
-                    android.media.AudioAttributes.Builder()
-                        .setUsage(android.media.AudioAttributes.USAGE_MEDIA)
-                        .setContentType(android.media.AudioAttributes.CONTENT_TYPE_MUSIC)
-                        .build()
-                )
-                .setAcceptsDelayedFocusGain(true)
-                .setOnAudioFocusChangeListener(audioFocusChangeListener)
-                .build()
-            audioFocusRequest = request
-            val result = audioManager.requestAudioFocus(request)
-            return result == AudioManager.AUDIOFOCUS_REQUEST_GRANTED
+    private var callMonitorJob: Job? = null
+
+    private fun startCallMonitor() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            if (modeListener == null) {
+                modeListener = AudioManager.OnModeChangedListener { mode ->
+                    val isCallActive = mode == AudioManager.MODE_IN_CALL || 
+                                       mode == AudioManager.MODE_RINGTONE || 
+                                       mode == AudioManager.MODE_IN_COMMUNICATION
+                    handleCallState(isCallActive)
+                }
+                audioManager.addOnModeChangedListener(mainExecutor, modeListener as AudioManager.OnModeChangedListener)
+                // Initialize state
+                val mode = audioManager.mode
+                handleCallState(mode == AudioManager.MODE_IN_CALL || 
+                                mode == AudioManager.MODE_RINGTONE || 
+                                mode == AudioManager.MODE_IN_COMMUNICATION)
+            }
         } else {
-            @Suppress("DEPRECATION")
-            val result = audioManager.requestAudioFocus(
-                audioFocusChangeListener,
-                AudioManager.STREAM_MUSIC,
-                AudioManager.AUDIOFOCUS_GAIN
-            )
-            return result == AudioManager.AUDIOFOCUS_REQUEST_GRANTED
+            if (callMonitorJob?.isActive == true) return
+            callMonitorJob = serviceScope.launch {
+                while (isActive) {
+                    val mode = audioManager.mode
+                    val isCallActive = mode == AudioManager.MODE_IN_CALL || 
+                                       mode == AudioManager.MODE_RINGTONE || 
+                                       mode == AudioManager.MODE_IN_COMMUNICATION
+                    handleCallState(isCallActive)
+                    delay(500)
+                }
+            }
         }
     }
 
-    private fun abandonAudioFocus() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            audioFocusRequest?.let { audioManager.abandonAudioFocusRequest(it) }
+    private fun stopCallMonitor() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            modeListener?.let {
+                audioManager.removeOnModeChangedListener(it as AudioManager.OnModeChangedListener)
+                modeListener = null
+            }
         } else {
-            @Suppress("DEPRECATION")
-            audioManager.abandonAudioFocus(audioFocusChangeListener)
+            callMonitorJob?.cancel()
+            callMonitorJob = null
         }
     }
 
     override fun onDestroy() {
         generator.stop()
         sleepTimerJob?.cancel()
-        abandonAudioFocus()
+        stopCallMonitor()
         super.onDestroy()
     }
 
