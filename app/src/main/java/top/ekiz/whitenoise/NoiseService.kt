@@ -50,6 +50,7 @@ class NoiseService : Service() {
     fun stopPlayback() {
         generator.stop()
         stopForeground(STOP_FOREGROUND_REMOVE)
+        stopSelf()
     }
 
     fun setVolume(vol: Float) {

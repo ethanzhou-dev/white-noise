@@ -144,6 +144,9 @@ fun MainAppScreen(isBound: Boolean, service: NoiseService?, dataStore: SettingsD
         if (isPlaying) {
             service?.stopPlayback()
         } else {
+            val startIntent = Intent(context, NoiseService::class.java)
+            ContextCompat.startForegroundService(context, startIntent)
+            
             // Apply current volume and type before starting just in case
             service?.setVolume(volume)
             service?.setNoiseType(noiseType)
