@@ -43,6 +43,26 @@ class NoiseGenerator {
     @Volatile
     private var isStopping = false
 
+    @Volatile
+    var isDucked = false
+
+    @Volatile
+    private var sleepFadeDurationFrames: Long = 0
+
+    @Volatile
+    private var sleepFadeRemainingFrames: Long = 0
+
+    fun startSleepFadeOut(durationMillis: Long) {
+        val frames = (durationMillis * sampleRate) / 1000L
+        sleepFadeDurationFrames = frames
+        sleepFadeRemainingFrames = frames
+    }
+
+    fun cancelSleepFadeOut() {
+        sleepFadeDurationFrames = 0
+        sleepFadeRemainingFrames = 0
+    }
+
     fun start() {
         if (isPlaying) return
         isPlaying = true
@@ -51,6 +71,8 @@ class NoiseGenerator {
         if (job?.isActive == true) return
 
         job = scope.launch {
+            sleepFadeDurationFrames = 0
+            sleepFadeRemainingFrames = 0
             android.os.Process.setThreadPriority(android.os.Process.THREAD_PRIORITY_URGENT_AUDIO)
             
             val audioTrack = AudioTrack.Builder()
@@ -108,6 +130,9 @@ class NoiseGenerator {
             var targetFade = 1f
             val fadeStep = 1f / (sampleRate * 0.5f) // 0.5 seconds fade
 
+            var currentTimerFade = 1f
+            val timerFadeRestoreStep = 1f / (sampleRate * 2f) // 2 seconds restore fade
+
             var activeNoiseType = noiseType
 
             // XorShift32 state for fast PRNG
@@ -120,17 +145,18 @@ class NoiseGenerator {
                 }
 
                 if (!isStopping) {
+                    val duckTarget = if (isDucked) 0.2f else 1f
                     if (activeNoiseType != noiseType) {
                         targetFade = 0f
                         if (currentFade <= 0f) {
                             activeNoiseType = noiseType
-                            targetFade = 1f
+                            targetFade = duckTarget
                             // Reset states to avoid pops from accumulated values
                             lastBrownOutL = 0f; lastWhiteL = 0f; b0L = 0f; b1L = 0f; b2L = 0f; b3L = 0f; b4L = 0f; b5L = 0f; b6L = 0f; lastBlackOutL = 0f; lastGreenL = 0f; lastWhiteLGreen = 0f
                             lastBrownOutR = 0f; lastWhiteR = 0f; b0R = 0f; b1R = 0f; b2R = 0f; b3R = 0f; b4R = 0f; b5R = 0f; b6R = 0f; lastBlackOutR = 0f; lastGreenR = 0f; lastWhiteRGreen = 0f
                         }
                     } else {
-                        targetFade = 1f
+                        targetFade = duckTarget
                     }
                 } else {
                     targetFade = 0f
@@ -151,6 +177,24 @@ class NoiseGenerator {
 
                     // Apply smooth S-curve to fade for more natural sound (optional, but sounds better)
                     val smoothFade = currentFade * currentFade * (3f - 2f * currentFade)
+
+                    // Timer fade logic
+                    var targetTimerFade = 1f
+                    if (sleepFadeDurationFrames > 0) {
+                        if (sleepFadeRemainingFrames > 0) {
+                            targetTimerFade = sleepFadeRemainingFrames.toFloat() / sleepFadeDurationFrames.toFloat()
+                            sleepFadeRemainingFrames--
+                        } else {
+                            targetTimerFade = 0f
+                        }
+                    }
+
+                    if (currentTimerFade < targetTimerFade) {
+                        currentTimerFade = (currentTimerFade + timerFadeRestoreStep).coerceAtMost(targetTimerFade)
+                    } else {
+                        currentTimerFade = targetTimerFade
+                    }
+                    val naturalTimerFade = currentTimerFade * currentTimerFade
 
                     // XorShift32 algorithm for ultra-fast pseudo-random noise
                     rngState = rngState xor (rngState shl 13)
@@ -262,8 +306,8 @@ class NoiseGenerator {
                     if (outputR > 1f) outputR = 1f
                     if (outputR < -1f) outputR = -1f
 
-                    buffer[i] = (outputL * leftVol * Short.MAX_VALUE * currentVolume * smoothFade).toInt().toShort()
-                    buffer[i + 1] = (outputR * rightVol * Short.MAX_VALUE * currentVolume * smoothFade).toInt().toShort()
+                    buffer[i] = (outputL * leftVol * Short.MAX_VALUE * currentVolume * smoothFade * naturalTimerFade).toInt().toShort()
+                    buffer[i + 1] = (outputR * rightVol * Short.MAX_VALUE * currentVolume * smoothFade * naturalTimerFade).toInt().toShort()
                 }
                 
                 audioTrack.write(buffer, 0, buffer.size)

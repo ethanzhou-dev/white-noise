@@ -5,7 +5,10 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.app.Service
+import android.content.Context
 import android.content.Intent
+import android.media.AudioFocusRequest
+import android.media.AudioManager
 import android.os.Binder
 import android.os.Build
 import android.os.IBinder
@@ -27,6 +30,10 @@ class NoiseService : Service() {
     private var sleepTotalTimeMillis: Long = 0L
     private var sleepRemainingPausedMillis: Long = 0L
     private var isSleepTimerPaused: Boolean = false
+    
+    private lateinit var audioManager: AudioManager
+    private var audioFocusRequest: AudioFocusRequest? = null
+    private var isPausedByFocusLoss = false
 
     companion object {
         const val CHANNEL_ID = "WhiteNoiseChannel"
@@ -41,6 +48,7 @@ class NoiseService : Service() {
     override fun onCreate() {
         super.onCreate()
         createNotificationChannel()
+        audioManager = getSystemService(Context.AUDIO_SERVICE) as AudioManager
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -55,12 +63,18 @@ class NoiseService : Service() {
     }
 
     fun startPlayback() {
-        generator.start()
-        startForeground(NOTIFICATION_ID, createNotification())
+        if (requestAudioFocus()) {
+            isPausedByFocusLoss = false
+            generator.isDucked = false
+            generator.start()
+            startForeground(NOTIFICATION_ID, createNotification())
+        }
     }
 
     fun stopPlayback() {
+        generator.cancelSleepFadeOut()
         generator.stop()
+        abandonAudioFocus()
         sleepTimerJob?.cancel()
         sleepEndTimeMillis = 0L
         sleepTotalTimeMillis = 0L
@@ -84,6 +98,7 @@ class NoiseService : Service() {
 
     fun setSleepTimer(minutes: Int) {
         sleepTimerJob?.cancel()
+        generator.cancelSleepFadeOut()
         if (minutes > 0) {
             sleepTotalTimeMillis = minutes * 60 * 1000L
             sleepRemainingPausedMillis = sleepTotalTimeMillis
@@ -103,7 +118,15 @@ class NoiseService : Service() {
             isSleepTimerPaused = false
             sleepTimerJob?.cancel()
             sleepTimerJob = serviceScope.launch {
-                delay(sleepRemainingPausedMillis)
+                val fadeDuration = 60_000L
+                if (sleepRemainingPausedMillis > fadeDuration) {
+                    delay(sleepRemainingPausedMillis - fadeDuration)
+                    generator.startSleepFadeOut(fadeDuration)
+                    delay(fadeDuration)
+                } else {
+                    generator.startSleepFadeOut(sleepRemainingPausedMillis)
+                    delay(sleepRemainingPausedMillis)
+                }
                 if (isPlaying()) {
                     stopPlayback()
                 }
@@ -118,6 +141,7 @@ class NoiseService : Service() {
     fun pauseSleepTimer() {
         if (sleepEndTimeMillis > 0L && !isSleepTimerPaused) {
             sleepTimerJob?.cancel()
+            generator.cancelSleepFadeOut()
             sleepRemainingPausedMillis = maxOf(0L, sleepEndTimeMillis - System.currentTimeMillis())
             isSleepTimerPaused = true
             sleepEndTimeMillis = 0L
@@ -146,11 +170,73 @@ class NoiseService : Service() {
         return generator.isPlaying
     }
 
+    private val audioFocusChangeListener = AudioManager.OnAudioFocusChangeListener { focusChange ->
+        when (focusChange) {
+            AudioManager.AUDIOFOCUS_GAIN -> {
+                if (isPausedByFocusLoss) {
+                    isPausedByFocusLoss = false
+                    startPlayback()
+                } else if (generator.isDucked) {
+                    generator.isDucked = false
+                }
+            }
+            AudioManager.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK -> {
+                if (isPlaying()) {
+                    generator.isDucked = true
+                }
+            }
+            AudioManager.AUDIOFOCUS_LOSS_TRANSIENT -> {
+                if (isPlaying()) {
+                    isPausedByFocusLoss = true
+                    generator.stop()
+                }
+            }
+            AudioManager.AUDIOFOCUS_LOSS -> {
+                isPausedByFocusLoss = false
+                stopPlayback()
+            }
+        }
+    }
 
+    private fun requestAudioFocus(): Boolean {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val request = AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN)
+                .setAudioAttributes(
+                    android.media.AudioAttributes.Builder()
+                        .setUsage(android.media.AudioAttributes.USAGE_MEDIA)
+                        .setContentType(android.media.AudioAttributes.CONTENT_TYPE_MUSIC)
+                        .build()
+                )
+                .setAcceptsDelayedFocusGain(true)
+                .setOnAudioFocusChangeListener(audioFocusChangeListener)
+                .build()
+            audioFocusRequest = request
+            val result = audioManager.requestAudioFocus(request)
+            return result == AudioManager.AUDIOFOCUS_REQUEST_GRANTED
+        } else {
+            @Suppress("DEPRECATION")
+            val result = audioManager.requestAudioFocus(
+                audioFocusChangeListener,
+                AudioManager.STREAM_MUSIC,
+                AudioManager.AUDIOFOCUS_GAIN
+            )
+            return result == AudioManager.AUDIOFOCUS_REQUEST_GRANTED
+        }
+    }
+
+    private fun abandonAudioFocus() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            audioFocusRequest?.let { audioManager.abandonAudioFocusRequest(it) }
+        } else {
+            @Suppress("DEPRECATION")
+            audioManager.abandonAudioFocus(audioFocusChangeListener)
+        }
+    }
 
     override fun onDestroy() {
         generator.stop()
         sleepTimerJob?.cancel()
+        abandonAudioFocus()
         super.onDestroy()
     }
 
