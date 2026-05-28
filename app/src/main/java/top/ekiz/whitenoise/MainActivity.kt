@@ -14,38 +14,29 @@ import androidx.activity.enableEdgeToEdge
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
+
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material.icons.filled.ArrowBack
-import androidx.compose.material.icons.filled.Pause
-import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.VolumeUp
-import androidx.compose.material.icons.filled.Headset
-import androidx.compose.material.icons.filled.SurroundSound
-
-import androidx.navigation.compose.NavHost
-import androidx.navigation.compose.composable
-import androidx.navigation.compose.rememberNavController
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.graphics.StrokeCap
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Headset
 import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.Pause
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.SurroundSound
+import androidx.compose.material.icons.filled.VolumeUp
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import kotlinx.coroutines.delay
@@ -208,11 +199,8 @@ fun MainAppScreen(isBound: Boolean, service: NoiseService?, dataStore: SettingsD
     }
 
     var selectedTab by remember { mutableIntStateOf(0) }
-    val navController = rememberNavController()
 
-    NavHost(navController = navController, startDestination = "home") {
-        composable("home") {
-            Scaffold(
+    Scaffold(
         topBar = {
             TopAppBar(
                 title = { Text(if (selectedTab == 0) "白噪音" else "设置") },
@@ -244,57 +232,55 @@ fun MainAppScreen(isBound: Boolean, service: NoiseService?, dataStore: SettingsD
                 )
             }
         }
-        ) { paddingValues ->
-            if (selectedTab == 0) {
-                SoundsScreen(
-                    innerPadding = paddingValues,
-                    currentType = noiseType,
-                    onTypeSelected = { newType ->
-                        noiseType = newType
-                        service?.setNoiseType(newType)
-                        coroutineScope.launch {
-                            dataStore.saveNoiseType(newType)
-                        }
+    ) { paddingValues ->
+        if (selectedTab == 0) {
+            SoundsScreen(
+                innerPadding = paddingValues,
+                currentType = noiseType,
+                onTypeSelected = { newType ->
+                    noiseType = newType
+                    service?.setNoiseType(newType)
+                    coroutineScope.launch {
+                        dataStore.saveNoiseType(newType)
                     }
-                )
-            } else {
-                SettingsScreen(
-                    innerPadding = paddingValues,
-                    volume = volume,
-                    onVolumeChanged = {
-                        volume = it
-                        service?.setVolume(it)
-                        coroutineScope.launch { dataStore.saveVolume(it) }
-                    },
-                    balance = balance,
-                    onBalanceChanged = {
-                        balance = it
-                        service?.setBalance(it)
-                        coroutineScope.launch { dataStore.saveBalance(it) }
-                    },
-                    stereoWidth = stereoWidth,
-                    onStereoWidthChanged = {
-                        stereoWidth = it
-                        service?.setStereoWidth(it)
-                        coroutineScope.launch { dataStore.saveStereoWidth(it) }
-                    },
-                    sleepTimer = initialSleepTimer,
-                    onSleepTimerChanged = {
-                        coroutineScope.launch { dataStore.saveSleepTimer(it) }
-                        service?.setSleepTimer(it)
-                    },
-                    isTimerRunning = isTimerRunning,
-                    onStartTimer = { service?.startSleepTimer() },
-                    onPauseTimer = { service?.pauseSleepTimer() },
-                    remainingTimeMillis = remainingTimeMillis,
-                    totalTimeMillis = totalTimeMillis,
-                    themeMode = initialThemeMode,
-                    onThemeModeChanged = {
-                        coroutineScope.launch { dataStore.saveThemeMode(it) }
-                    }
-                )
-            }
-        }
+                }
+            )
+        } else {
+            SettingsScreen(
+                innerPadding = paddingValues,
+                volume = volume,
+                onVolumeChanged = {
+                    volume = it
+                    service?.setVolume(it)
+                    coroutineScope.launch { dataStore.saveVolume(it) }
+                },
+                balance = balance,
+                onBalanceChanged = {
+                    balance = it
+                    service?.setBalance(it)
+                    coroutineScope.launch { dataStore.saveBalance(it) }
+                },
+                stereoWidth = stereoWidth,
+                onStereoWidthChanged = {
+                    stereoWidth = it
+                    service?.setStereoWidth(it)
+                    coroutineScope.launch { dataStore.saveStereoWidth(it) }
+                },
+                sleepTimer = initialSleepTimer,
+                onSleepTimerChanged = {
+                    coroutineScope.launch { dataStore.saveSleepTimer(it) }
+                    service?.setSleepTimer(it)
+                },
+                isTimerRunning = isTimerRunning,
+                onStartTimer = { service?.startSleepTimer() },
+                onPauseTimer = { service?.pauseSleepTimer() },
+                remainingTimeMillis = remainingTimeMillis,
+                totalTimeMillis = totalTimeMillis,
+                themeMode = initialThemeMode,
+                onThemeModeChanged = {
+                    coroutineScope.launch { dataStore.saveThemeMode(it) }
+                }
+            )
         }
     }
 }
@@ -361,60 +347,7 @@ fun NoiseCard(name: String, isSelected: Boolean, onClick: () -> Unit) {
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-fun PlaybackScreen(
-    noiseType: NoiseType,
-    isPlaying: Boolean,
-    onPlayPauseClicked: () -> Unit,
-    onBack: () -> Unit
-) {
-    val noiseName = when (noiseType) {
-        NoiseType.WHITE -> "白噪音"
-        NoiseType.PINK -> "粉噪音"
-        NoiseType.BROWN -> "棕噪音"
-        NoiseType.BLUE -> "蓝噪音"
-        NoiseType.VIOLET -> "紫噪音"
-    }
 
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text("正在播放") },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.Filled.ArrowBack, contentDescription = "返回")
-                    }
-                }
-            )
-        }
-    ) { paddingValues ->
-        Column(
-            modifier = Modifier
-                .padding(paddingValues)
-                .fillMaxSize(),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center
-        ) {
-            Text(
-                text = noiseName,
-                style = MaterialTheme.typography.displayMedium,
-                color = MaterialTheme.colorScheme.primary
-            )
-            Spacer(modifier = Modifier.height(64.dp))
-            Button(
-                onClick = onPlayPauseClicked,
-                modifier = Modifier.size(120.dp),
-                shape = CircleShape
-            ) {
-                Text(
-                    text = if (isPlaying) "暂停" else "播放",
-                    style = MaterialTheme.typography.titleLarge
-                )
-            }
-        }
-    }
-}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable

@@ -149,14 +149,8 @@ class NoiseService : Service() {
     fun isPlaying(): Boolean {
         return generator.isPlaying
     }
-    
-    fun getVolume(): Float {
-        return generator.volume
-    }
-    
-    fun getNoiseType(): NoiseType {
-        return generator.noiseType
-    }
+
+
 
     override fun onDestroy() {
         generator.stop()
