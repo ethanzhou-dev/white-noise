@@ -65,7 +65,6 @@ class NoiseService : Service() {
     fun startPlayback() {
         if (requestAudioFocus()) {
             isPausedByFocusLoss = false
-            generator.isDucked = false
             generator.start()
             startForeground(NOTIFICATION_ID, createNotification())
         }
@@ -176,14 +175,10 @@ class NoiseService : Service() {
                 if (isPausedByFocusLoss) {
                     isPausedByFocusLoss = false
                     startPlayback()
-                } else if (generator.isDucked) {
-                    generator.isDucked = false
                 }
             }
             AudioManager.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK -> {
-                if (isPlaying()) {
-                    generator.isDucked = true
-                }
+                // 通知降低声音的逻辑不需要了，忽略，保持原音量
             }
             AudioManager.AUDIOFOCUS_LOSS_TRANSIENT -> {
                 if (isPlaying()) {

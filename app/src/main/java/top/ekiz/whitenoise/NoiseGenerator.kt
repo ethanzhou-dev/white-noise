@@ -44,9 +44,6 @@ class NoiseGenerator {
     private var isStopping = false
 
     @Volatile
-    var isDucked = false
-
-    @Volatile
     private var sleepFadeDurationFrames: Long = 0
 
     @Volatile
@@ -145,18 +142,17 @@ class NoiseGenerator {
                 }
 
                 if (!isStopping) {
-                    val duckTarget = if (isDucked) 0.2f else 1f
                     if (activeNoiseType != noiseType) {
                         targetFade = 0f
                         if (currentFade <= 0f) {
                             activeNoiseType = noiseType
-                            targetFade = duckTarget
+                            targetFade = 1f
                             // Reset states to avoid pops from accumulated values
                             lastBrownOutL = 0f; lastWhiteL = 0f; b0L = 0f; b1L = 0f; b2L = 0f; b3L = 0f; b4L = 0f; b5L = 0f; b6L = 0f; lastBlackOutL = 0f; lastGreenL = 0f; lastWhiteLGreen = 0f
                             lastBrownOutR = 0f; lastWhiteR = 0f; b0R = 0f; b1R = 0f; b2R = 0f; b3R = 0f; b4R = 0f; b5R = 0f; b6R = 0f; lastBlackOutR = 0f; lastGreenR = 0f; lastWhiteRGreen = 0f
                         }
                     } else {
-                        targetFade = duckTarget
+                        targetFade = 1f
                     }
                 } else {
                     targetFade = 0f
