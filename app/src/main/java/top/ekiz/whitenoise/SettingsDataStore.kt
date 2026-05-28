@@ -29,6 +29,7 @@ class SettingsDataStore @Inject constructor(@ApplicationContext private val cont
         val TIMER_REMAINING_KEY = longPreferencesKey("timer_remaining")
         val BALANCE_KEY = floatPreferencesKey("balance")
         val THEME_MODE_KEY = stringPreferencesKey("theme_mode")
+        val SPATIAL_AUDIO_KEY = androidx.datastore.preferences.core.booleanPreferencesKey("spatial_audio")
     }
 
     val volumeFlow: Flow<Float> = context.dataStore.data
@@ -61,6 +62,9 @@ class SettingsDataStore @Inject constructor(@ApplicationContext private val cont
     val themeModeFlow: Flow<String> = context.dataStore.data
         .map { preferences -> preferences[THEME_MODE_KEY] ?: "System" }
 
+    val spatialAudioFlow: Flow<Boolean> = context.dataStore.data
+        .map { preferences -> preferences[SPATIAL_AUDIO_KEY] ?: true }
+
     suspend fun saveVolume(volume: Float) {
         context.dataStore.edit { preferences ->
             preferences[VOLUME_KEY] = volume
@@ -91,5 +95,9 @@ class SettingsDataStore @Inject constructor(@ApplicationContext private val cont
 
     suspend fun saveThemeMode(mode: String) {
         context.dataStore.edit { preferences -> preferences[THEME_MODE_KEY] = mode }
+    }
+
+    suspend fun saveSpatialAudio(enabled: Boolean) {
+        context.dataStore.edit { preferences -> preferences[SPATIAL_AUDIO_KEY] = enabled }
     }
 }

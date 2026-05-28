@@ -41,6 +41,7 @@ class NoiseService : MediaSessionService() {
     private var modeListener: Any? = null
     private var isPausedByCall = false
     private var timerJob: Job? = null
+    private var fadeJob: Job? = null
 
     override fun onCreate() {
         super.onCreate()
@@ -68,6 +69,21 @@ class NoiseService : MediaSessionService() {
             .build()
 
         val sessionCallback = object : MediaSession.Callback {
+            override fun onConnect(
+                session: MediaSession,
+                controller: MediaSession.ControllerInfo
+            ): MediaSession.ConnectionResult {
+                val availableCommands = MediaSession.ConnectionResult.DEFAULT_SESSION_AND_LIBRARY_COMMANDS.buildUpon()
+                    .add(SessionCommand("START_SLEEP_TIMER", Bundle.EMPTY))
+                    .add(SessionCommand("CANCEL_SLEEP_TIMER", Bundle.EMPTY))
+                    .add(SessionCommand("PLAY_WITH_FADE", Bundle.EMPTY))
+                    .add(SessionCommand("PAUSE_WITH_FADE", Bundle.EMPTY))
+                    .build()
+                return MediaSession.ConnectionResult.AcceptedResultBuilder(session)
+                    .setAvailableSessionCommands(availableCommands)
+                    .build()
+            }
+
             override fun onCustomCommand(
                 session: MediaSession,
                 controller: MediaSession.ControllerInfo,
@@ -81,6 +97,21 @@ class NoiseService : MediaSessionService() {
                     }
                     "CANCEL_SLEEP_TIMER" -> {
                         cancelTimer()
+                    }
+                    "PLAY_WITH_FADE" -> {
+                        fadeJob?.cancel()
+                        noiseProcessor.fadeIn(1000L)
+                        player.play()
+                        isPausedByCall = false
+                    }
+                    "PAUSE_WITH_FADE" -> {
+                        fadeJob?.cancel()
+                        noiseProcessor.fadeOut(500L)
+                        fadeJob = serviceScope.launch {
+                            delay(500L)
+                            player.pause()
+                            noiseProcessor.fadeIn(100L)
+                        }
                     }
                 }
                 return Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS))
@@ -117,6 +148,12 @@ class NoiseService : MediaSessionService() {
             }
         }
 
+        serviceScope.launch {
+            settingsDataStore.spatialAudioFlow.collect { enabled ->
+                noiseProcessor.isSpatialAudioEnabled = enabled
+            }
+        }
+
         startCallMonitor()
     }
 
@@ -134,6 +171,10 @@ class NoiseService : MediaSessionService() {
             }
             player.pause()
             noiseProcessor.fadeIn(100L) // reset fade for next time
+            
+            // Sync with ViewModel: clear timer state in DataStore
+            settingsDataStore.saveTimerEndTime(0L)
+            settingsDataStore.saveTimerRemaining(0L)
         }
     }
 
@@ -159,8 +200,9 @@ class NoiseService : MediaSessionService() {
     private fun handleCallState(isCallActive: Boolean) {
         if (isCallActive) {
             if (player.isPlaying) {
+                fadeJob?.cancel()
                 noiseProcessor.fadeOut(500L)
-                serviceScope.launch {
+                fadeJob = serviceScope.launch {
                     delay(500L)
                     player.pause()
                     isPausedByCall = true
@@ -168,6 +210,7 @@ class NoiseService : MediaSessionService() {
             }
         } else {
             if (isPausedByCall) {
+                fadeJob?.cancel()
                 noiseProcessor.fadeIn(1000L)
                 player.play()
                 isPausedByCall = false

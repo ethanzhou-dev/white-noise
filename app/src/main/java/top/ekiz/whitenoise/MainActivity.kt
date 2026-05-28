@@ -26,6 +26,7 @@ import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.getValue
@@ -66,6 +67,11 @@ class MainActivity : ComponentActivity() {
             {
                 mediaController = controllerFuture?.get()
                 viewModel.setMediaController(mediaController)
+                mediaController?.addListener(object : androidx.media3.common.Player.Listener {
+                    override fun onIsPlayingChanged(isPlaying: Boolean) {
+                        viewModel.updatePlaybackState()
+                    }
+                })
             },
             MoreExecutors.directExecutor()
         )
@@ -187,10 +193,13 @@ fun MainAppScreen(activity: MainActivity, uiState: NoiseUiState, viewModel: Nois
                 isTimerRunning = uiState.isTimerRunning,
                 onStartTimer = { viewModel.startTimer() },
                 onPauseTimer = { viewModel.pauseTimer() },
+                onCancelTimer = { viewModel.cancelTimer() },
                 remainingTimeMillis = uiState.activeRemainingMillis,
                 totalTimeMillis = uiState.totalTimerMillis,
                 themeMode = uiState.themeMode,
-                onThemeModeChanged = { viewModel.setThemeMode(it) }
+                onThemeModeChanged = { viewModel.setThemeMode(it) },
+                isSpatialAudioEnabled = uiState.isSpatialAudioEnabled,
+                onSpatialAudioEnabledChanged = { viewModel.setSpatialAudioEnabled(it) }
             )
         }
     }
@@ -291,9 +300,10 @@ fun SettingsScreen(
     volume: Float, onVolumeChanged: (Float) -> Unit,
     balance: Float, onBalanceChanged: (Float) -> Unit,
     sleepTimer: Int, onSleepTimerChanged: (Int) -> Unit,
-    isTimerRunning: Boolean, onStartTimer: () -> Unit, onPauseTimer: () -> Unit,
+    isTimerRunning: Boolean, onStartTimer: () -> Unit, onPauseTimer: () -> Unit, onCancelTimer: () -> Unit,
     remainingTimeMillis: Long, totalTimeMillis: Long,
-    themeMode: String, onThemeModeChanged: (String) -> Unit
+    themeMode: String, onThemeModeChanged: (String) -> Unit,
+    isSpatialAudioEnabled: Boolean, onSpatialAudioEnabledChanged: (Boolean) -> Unit
 ) {
     Column(
         modifier = Modifier
@@ -338,47 +348,115 @@ fun SettingsScreen(
             modifier = Modifier.padding(start = 16.dp, top = 8.dp, bottom = 8.dp)
         )
         
-        Column(modifier = Modifier.padding(horizontal = 16.dp)) {
-            var customMinutesInput by remember(sleepTimer) { mutableStateOf(if (sleepTimer > 0) sleepTimer.toString() else "") }
-            
-            OutlinedTextField(
-                value = customMinutesInput,
-                onValueChange = { newValue ->
-                    val filtered = newValue.filter { char -> char.isDigit() }
-                    customMinutesInput = filtered
-                    val minutes = filtered.toIntOrNull() ?: 0
-                    onSleepTimerChanged(minutes)
-                },
-                label = { Text("定时关闭时长") },
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                modifier = Modifier.fillMaxWidth(),
-                trailingIcon = { Text("分钟", modifier = Modifier.padding(end = 16.dp)) },
-                singleLine = true
+        var showTimePicker by remember { mutableStateOf(false) }
+        
+        SliderSettingRow(
+            icon = Icons.Filled.Schedule,
+            contentDescription = "倒计时长: $sleepTimer 分钟",
+            value = sleepTimer.coerceAtMost(120).toFloat(),
+            onValueChange = { onSleepTimerChanged(it.toInt()) },
+            valueRange = 0f..120f,
+            labels = listOf("0", "60", "120"),
+            steps = 11
+        )
+        
+        val calendar = java.util.Calendar.getInstance()
+        if (isTimerRunning || remainingTimeMillis > 0L) {
+            calendar.timeInMillis = System.currentTimeMillis() + remainingTimeMillis
+        } else {
+            calendar.timeInMillis = System.currentTimeMillis() + sleepTimer * 60000L
+        }
+        val targetHour = calendar.get(java.util.Calendar.HOUR_OF_DAY)
+        val targetMinute = calendar.get(java.util.Calendar.MINUTE)
+        
+        ListItem(
+            headlineContent = { Text("指定时间关闭") },
+            supportingContent = { Text((if (isTimerRunning) "将在 %02d:%02d 自动关闭 (运行中)" else "将在 %02d:%02d 自动关闭").format(targetHour, targetMinute)) },
+            leadingContent = { Icon(Icons.Filled.Schedule, contentDescription = null) },
+            trailingContent = {
+                OutlinedButton(onClick = { showTimePicker = true }) {
+                    Text("设定时间")
+                }
+            }
+        )
+        
+        if (showTimePicker) {
+            val timePickerState = rememberTimePickerState(
+                initialHour = targetHour,
+                initialMinute = targetMinute,
+                is24Hour = true
             )
-            
+            AlertDialog(
+                onDismissRequest = { showTimePicker = false },
+                confirmButton = {
+                    TextButton(onClick = {
+                        val now = java.util.Calendar.getInstance()
+                        val selected = java.util.Calendar.getInstance().apply {
+                            set(java.util.Calendar.HOUR_OF_DAY, timePickerState.hour)
+                            set(java.util.Calendar.MINUTE, timePickerState.minute)
+                            set(java.util.Calendar.SECOND, 0)
+                        }
+                        if (selected.before(now)) {
+                            selected.add(java.util.Calendar.DAY_OF_YEAR, 1)
+                        }
+                        val diffMinutes = ((selected.timeInMillis - now.timeInMillis) / 60000L).toInt().coerceAtLeast(1)
+                        onSleepTimerChanged(diffMinutes)
+                        showTimePicker = false
+                    }) {
+                        Text("确定")
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showTimePicker = false }) { Text("取消") }
+                },
+                text = {
+                    TimePicker(state = timePickerState)
+                }
+            )
+        }
+        
+        Column(modifier = Modifier.padding(horizontal = 16.dp)) {
+            val isPaused = !isTimerRunning && remainingTimeMillis > 0L
+
             Row(
                 modifier = Modifier.fillMaxWidth().padding(top = 16.dp),
                 horizontalArrangement = Arrangement.spacedBy(16.dp)
             ) {
                 Button(
                     onClick = onStartTimer,
-                    enabled = !isTimerRunning && (sleepTimer > 0),
+                    enabled = !isTimerRunning && (sleepTimer > 0 || remainingTimeMillis > 0L),
                     modifier = Modifier.weight(1f)
                 ) {
-                    Text("开始")
+                    Text(if (isPaused) "继续" else "开始")
                 }
-                OutlinedButton(
-                    onClick = onPauseTimer,
-                    enabled = isTimerRunning,
-                    modifier = Modifier.weight(1f)
-                ) {
-                    Text("暂停")
+                if (isTimerRunning) {
+                    OutlinedButton(
+                        onClick = onPauseTimer,
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Text("暂停")
+                    }
+                } else if (isPaused) {
+                    OutlinedButton(
+                        onClick = onCancelTimer,
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Text("取消")
+                    }
+                } else {
+                    OutlinedButton(
+                        onClick = {},
+                        enabled = false,
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Text("暂停")
+                    }
                 }
             }
 
             if (isTimerRunning || remainingTimeMillis > 0L) {
                 val totalForProgress = if (totalTimeMillis > 0L) totalTimeMillis else remainingTimeMillis
-                val progress = if (totalForProgress > 0) remainingTimeMillis.toFloat() / totalForProgress.toFloat() else 0f
+                val progress = if (totalForProgress > 0) (remainingTimeMillis.toFloat() / totalForProgress.toFloat()).coerceIn(0f, 1f) else 0f
                 val remainingMinutes = remainingTimeMillis / 60000
                 val remainingSeconds = (remainingTimeMillis % 60000) / 1000
                 Spacer(modifier = Modifier.height(16.dp))
@@ -393,6 +471,32 @@ fun SettingsScreen(
                 )
             }
         }
+
+        HorizontalDivider(modifier = Modifier.padding(vertical = 16.dp))
+
+        Text(
+            text = "高级功能",
+            style = MaterialTheme.typography.labelLarge,
+            color = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.padding(start = 16.dp, top = 8.dp, bottom = 8.dp)
+        )
+
+        ListItem(
+            headlineContent = { Text("3D 空间音频 (双耳渲染)") },
+            supportingContent = { Text("开启后，白噪音会在脑海周围缓慢环绕，增强沉浸感和放松效果。") },
+            leadingContent = {
+                Icon(
+                    imageVector = Icons.Filled.Headset,
+                    contentDescription = "空间音频"
+                )
+            },
+            trailingContent = {
+                Switch(
+                    checked = isSpatialAudioEnabled,
+                    onCheckedChange = onSpatialAudioEnabledChanged
+                )
+            }
+        )
 
         HorizontalDivider(modifier = Modifier.padding(vertical = 16.dp))
 
@@ -429,7 +533,8 @@ fun SliderSettingRow(
     value: Float,
     onValueChange: (Float) -> Unit,
     valueRange: ClosedFloatingPointRange<Float>,
-    labels: List<String>? = null
+    labels: List<String>? = null,
+    steps: Int = 9
 ) {
     ListItem(
         headlineContent = { Text(contentDescription) },
@@ -445,7 +550,7 @@ fun SliderSettingRow(
                     value = value,
                     onValueChange = onValueChange,
                     valueRange = valueRange,
-                    steps = 9,
+                    steps = steps,
                     modifier = Modifier.fillMaxWidth()
                 )
                 if (labels != null) {
@@ -466,3 +571,5 @@ fun SliderSettingRow(
         }
     )
 }
+
+

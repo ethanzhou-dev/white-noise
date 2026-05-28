@@ -7,12 +7,14 @@ import androidx.media3.session.MediaController
 import androidx.media3.session.SessionCommand
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import top.ekiz.whitenoise.NoiseType
 import top.ekiz.whitenoise.SettingsDataStore
@@ -24,6 +26,7 @@ data class NoiseUiState(
     val noiseType: NoiseType = NoiseType.WHITE,
     val sleepTimerMinutes: Int = 0,
     val themeMode: String = "System",
+    val isSpatialAudioEnabled: Boolean = true,
     val isPlaying: Boolean = false,
     val activeRemainingMillis: Long = 0L,
     val totalTimerMillis: Long = 0L,
@@ -54,14 +57,16 @@ class NoiseViewModel @Inject constructor(
         dataStore.balanceFlow,
         dataStore.noiseTypeFlow,
         dataStore.sleepTimerFlow,
-        dataStore.themeModeFlow
-    ) { volume, balance, type, timerMinutes, theme ->
+        dataStore.themeModeFlow,
+        dataStore.spatialAudioFlow
+    ) { values ->
         NoiseUiState(
-            volume = volume,
-            balance = balance,
-            noiseType = type,
-            sleepTimerMinutes = timerMinutes,
-            themeMode = theme
+            volume = values[0] as Float,
+            balance = values[1] as Float,
+            noiseType = values[2] as NoiseType,
+            sleepTimerMinutes = values[3] as Int,
+            themeMode = values[4] as String,
+            isSpatialAudioEnabled = values[5] as Boolean
         )
     }
 
@@ -93,7 +98,7 @@ class NoiseViewModel @Inject constructor(
     init {
         // Ticker for UI
         viewModelScope.launch {
-            dataStore.timerEndTimeFlow.collect { endTime ->
+            dataStore.timerEndTimeFlow.collectLatest { endTime ->
                 if (endTime > 0L) {
                     _isTimerRunning.value = true
                     while (true) {
@@ -101,19 +106,19 @@ class NoiseViewModel @Inject constructor(
                         if (remaining > 0) {
                             _activeRemainingMillis.value = remaining
                         } else {
+                            // Timer expired naturally. 
+                            // The actual pause and fade out are handled natively by NoiseService.
+                            // We just update the local UI state to 0 and wait for NoiseService to clear the DataStore.
                             _activeRemainingMillis.value = 0L
-                            _isTimerRunning.value = false
-                            dataStore.saveTimerEndTime(0L)
                             break
                         }
                         delay(1000)
                     }
                 } else {
                     _isTimerRunning.value = false
-                    // When not running, load the paused remaining time
-                    dataStore.timerRemainingFlow.collect { remaining ->
-                        _activeRemainingMillis.value = remaining
-                    }
+                    // One-shot read of paused remaining time (not a nested collect)
+                    val remaining = dataStore.timerRemainingFlow.first()
+                    _activeRemainingMillis.value = remaining
                 }
             }
         }
@@ -131,11 +136,11 @@ class NoiseViewModel @Inject constructor(
     fun togglePlayPause() {
         val controller = mediaController ?: return
         if (controller.isPlaying) {
-            controller.pause()
+            controller.sendCustomCommand(SessionCommand("PAUSE_WITH_FADE", Bundle.EMPTY), Bundle.EMPTY)
         } else {
-            controller.play()
+            controller.sendCustomCommand(SessionCommand("PLAY_WITH_FADE", Bundle.EMPTY), Bundle.EMPTY)
         }
-        updatePlaybackState()
+        // updatePlaybackState() will be called when ExoPlayer's state actually changes
     }
 
     fun setVolume(volume: Float) {
@@ -151,32 +156,63 @@ class NoiseViewModel @Inject constructor(
     }
 
     fun setSleepTimerMinutes(minutes: Int) {
-        viewModelScope.launch { dataStore.saveSleepTimer(minutes) }
+        viewModelScope.launch {
+            dataStore.saveSleepTimer(minutes)
+            if (_isTimerRunning.value) {
+                // Auto-restart timer with new value if running
+                val totalMillis = minutes * 60000L
+                if (totalMillis > 0) {
+                    _totalTimerMillis.value = totalMillis
+                    dataStore.saveTimerRemaining(0L)
+                    dataStore.saveTimerEndTime(System.currentTimeMillis() + totalMillis)
+                    val bundle = Bundle().apply { putLong(EXTRA_DURATION_MS, totalMillis) }
+                    mediaController?.sendCustomCommand(SessionCommand(CMD_START_TIMER, Bundle.EMPTY), bundle)
+                } else {
+                    pauseTimer()
+                    dataStore.saveTimerRemaining(0L)
+                    _activeRemainingMillis.value = 0L
+                }
+            } else {
+                dataStore.saveTimerRemaining(0L)
+                _activeRemainingMillis.value = 0L
+            }
+        }
     }
 
     fun setThemeMode(mode: String) {
         viewModelScope.launch { dataStore.saveThemeMode(mode) }
     }
 
+    fun setSpatialAudioEnabled(enabled: Boolean) {
+        viewModelScope.launch { dataStore.saveSpatialAudio(enabled) }
+    }
+
     fun startTimer() {
         viewModelScope.launch {
             val uiStateVal = uiState.value
-            val totalMillis = if (uiStateVal.activeRemainingMillis > 0L) {
-                uiStateVal.activeRemainingMillis
+            val resumeMillis = uiStateVal.activeRemainingMillis
+            val isResume = resumeMillis > 0L
+
+            val durationMillis = if (isResume) {
+                resumeMillis
             } else {
                 uiStateVal.sleepTimerMinutes * 60000L
             }
             
-            if (totalMillis <= 0) return@launch
+            if (durationMillis <= 0) return@launch
 
-            _totalTimerMillis.value = totalMillis
+            // On fresh start, set totalTimerMillis to the full duration.
+            // On resume, keep the existing total so the progress bar continues from the correct ratio.
+            if (!isResume || _totalTimerMillis.value <= 0L) {
+                _totalTimerMillis.value = durationMillis
+            }
             
             // 1. Save to DataStore for UI persistence across restarts
             dataStore.saveTimerRemaining(0L)
-            dataStore.saveTimerEndTime(System.currentTimeMillis() + totalMillis)
+            dataStore.saveTimerEndTime(System.currentTimeMillis() + durationMillis)
             
             // 2. Send Custom Command to Service for execution
-            val bundle = Bundle().apply { putLong(EXTRA_DURATION_MS, totalMillis) }
+            val bundle = Bundle().apply { putLong(EXTRA_DURATION_MS, durationMillis) }
             mediaController?.sendCustomCommand(SessionCommand(CMD_START_TIMER, Bundle.EMPTY), bundle)
         }
     }
@@ -190,6 +226,20 @@ class NoiseViewModel @Inject constructor(
             dataStore.saveTimerEndTime(0L)
             
             // 2. Cancel Service execution
+            mediaController?.sendCustomCommand(SessionCommand(CMD_CANCEL_TIMER, Bundle.EMPTY), Bundle.EMPTY)
+        }
+    }
+
+    fun cancelTimer() {
+        viewModelScope.launch {
+            // Fully reset all timer state
+            _activeRemainingMillis.value = 0L
+            _totalTimerMillis.value = 0L
+            _isTimerRunning.value = false
+            
+            dataStore.saveTimerRemaining(0L)
+            dataStore.saveTimerEndTime(0L)
+            
             mediaController?.sendCustomCommand(SessionCommand(CMD_CANCEL_TIMER, Bundle.EMPTY), Bundle.EMPTY)
         }
     }
