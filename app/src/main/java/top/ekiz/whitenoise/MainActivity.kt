@@ -88,6 +88,11 @@ class MainActivity : ComponentActivity() {
         
         setContent {
             val uiState by viewModel.uiState.collectAsState()
+            
+            if (uiState.isLoading) {
+                return@setContent
+            }
+            
             val darkTheme = when (uiState.themeMode) {
                 "Dark" -> true
                 "Light" -> false

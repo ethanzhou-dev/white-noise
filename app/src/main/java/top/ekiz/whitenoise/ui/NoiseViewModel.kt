@@ -26,11 +26,12 @@ data class NoiseUiState(
     val noiseType: NoiseType = NoiseType.WHITE,
     val sleepTimerMinutes: Int = 0,
     val themeMode: String = "System",
-    val isSpatialAudioEnabled: Boolean = true,
+    val isSpatialAudioEnabled: Boolean = false,
     val isPlaying: Boolean = false,
     val activeRemainingMillis: Long = 0L,
     val totalTimerMillis: Long = 0L,
-    val isTimerRunning: Boolean = false
+    val isTimerRunning: Boolean = false,
+    val isLoading: Boolean = true
 )
 
 @HiltViewModel
@@ -87,12 +88,13 @@ class NoiseViewModel @Inject constructor(
             isPlaying = runtime[0] as Boolean,
             activeRemainingMillis = runtime[1] as Long,
             totalTimerMillis = runtime[2] as Long,
-            isTimerRunning = runtime[3] as Boolean
+            isTimerRunning = runtime[3] as Boolean,
+            isLoading = false
         )
     }.stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5000),
-        initialValue = NoiseUiState()
+        initialValue = NoiseUiState(isLoading = true)
     )
 
     init {
@@ -108,8 +110,12 @@ class NoiseViewModel @Inject constructor(
                         } else {
                             // Timer expired naturally. 
                             // The actual pause and fade out are handled natively by NoiseService.
-                            // We just update the local UI state to 0 and wait for NoiseService to clear the DataStore.
+                            // We clear the local UI state and DataStore so the UI is immediately synced.
                             _activeRemainingMillis.value = 0L
+                            _isTimerRunning.value = false
+                            _totalTimerMillis.value = 0L
+                            dataStore.saveTimerEndTime(0L)
+                            dataStore.saveTimerRemaining(0L)
                             break
                         }
                         delay(1000)

@@ -63,7 +63,7 @@ class SettingsDataStore @Inject constructor(@ApplicationContext private val cont
         .map { preferences -> preferences[THEME_MODE_KEY] ?: "System" }
 
     val spatialAudioFlow: Flow<Boolean> = context.dataStore.data
-        .map { preferences -> preferences[SPATIAL_AUDIO_KEY] ?: true }
+        .map { preferences -> preferences[SPATIAL_AUDIO_KEY] ?: false }
 
     suspend fun saveVolume(volume: Float) {
         context.dataStore.edit { preferences ->

@@ -12,25 +12,20 @@ class NoiseAudioProcessor : BaseAudioProcessor() {
     @Volatile var volume: Float = 0.5f // 0.0 to 1.0
     @Volatile var balance: Float = 0f // -1.0 to 1.0
     @Volatile var noiseType: NoiseType = NoiseType.WHITE
-    @Volatile var isSpatialAudioEnabled: Boolean = true
+    @Volatile var isSpatialAudioEnabled: Boolean = false
 
-    
-    @Volatile private var currentFade = 0f
-    @Volatile private var targetFade = 1f
-    @Volatile private var fadeStep = 1f / 44100f
-
-    fun fadeIn(durationMs: Long = 1000) {
-        targetFade = 1f
-        fadeStep = 1f / (44100f * (durationMs / 1000f).coerceAtLeast(0.1f))
-    }
-    
-    fun fadeOut(durationMs: Long = 1000) {
-        targetFade = 0f
-        fadeStep = 1f / (44100f * (durationMs / 1000f).coerceAtLeast(0.1f))
-    }
 
     private var currentNoiseType = noiseType
     private var fadingNoiseType: NoiseType? = null
+
+    fun initialize(type: NoiseType) {
+        noiseType = type
+        currentNoiseType = type
+        fadingNoiseType = null
+        crossfadeProgress = 1f
+        stateCurrent.reset()
+        stateFadeOut.reset()
+    }
     
     private var stateCurrent = NoiseGeneratorState()
     private var stateFadeOut = NoiseGeneratorState()
@@ -83,15 +78,7 @@ class NoiseAudioProcessor : BaseAudioProcessor() {
 
         var i = 0
         while (i < numShorts) {
-            if (currentFade != targetFade) {
-                if (currentFade < targetFade) {
-                    currentFade = min(currentFade + fadeStep, targetFade)
-                } else {
-                    currentFade = max(currentFade - fadeStep, targetFade)
-                }
-            }
-            val smoothFade = currentFade * currentFade * (3 - 2 * currentFade)
-            val effectiveVolume = currentVolume * smoothFade
+            val effectiveVolume = currentVolume
 
             // XorShift32 algorithm for ultra-fast pseudo-random noise
             rngState = rngState xor (rngState shl 13)
