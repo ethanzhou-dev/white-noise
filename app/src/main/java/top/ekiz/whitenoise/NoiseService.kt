@@ -105,6 +105,7 @@ class NoiseService : MediaSessionService() {
                             player.pause()
                             player.seekTo(0)
                             player.volume = 1f
+                            isPausedByCall = false
                         }
                     }
                 }
@@ -139,15 +140,41 @@ class NoiseService : MediaSessionService() {
             player.prepare()
 
             // Start collecting ongoing updates
-            launch { settingsDataStore.volumeFlow.collect { noiseProcessor.volume = it } }
+            val flushIfNotPlaying = {
+                if (!player.isPlaying) {
+                    // ExoPlayer ignores seekTo if the target position equals the current position.
+                    // Since PAUSE_WITH_FADE resets position to 0, seekTo(0) is ignored when paused.
+                    // We seek to 1ms or 0ms to guarantee a buffer flush for the new audio settings.
+                    val targetPos = if (player.currentPosition == 0L) 1L else 0L
+                    player.seekTo(targetPos)
+                }
+            }
+
+            launch { 
+                settingsDataStore.volumeFlow.collect { 
+                    noiseProcessor.volume = it 
+                    flushIfNotPlaying()
+                } 
+            }
             launch { 
                 settingsDataStore.noiseTypeFlow.collect { 
                     noiseProcessor.forceImmediateSwitch = !player.isPlaying
                     noiseProcessor.noiseType = it 
+                    flushIfNotPlaying()
                 } 
             }
-            launch { settingsDataStore.balanceFlow.collect { noiseProcessor.balance = it } }
-            launch { settingsDataStore.spatialAudioFlow.collect { noiseProcessor.isSpatialAudioEnabled = it } }
+            launch { 
+                settingsDataStore.balanceFlow.collect { 
+                    noiseProcessor.balance = it 
+                    flushIfNotPlaying()
+                } 
+            }
+            launch { 
+                settingsDataStore.spatialAudioFlow.collect { 
+                    noiseProcessor.isSpatialAudioEnabled = it 
+                    flushIfNotPlaying()
+                } 
+            }
             
             // Listen to Timer events from TimerManager (Single Source of Truth)
             launch {
@@ -163,6 +190,7 @@ class NoiseService : MediaSessionService() {
                             }
                         }
                         TimerEvent.TIMER_FINISHED -> {
+                            fadeJob?.cancel()
                             player.pause()
                             player.seekTo(0)
                             player.volume = 1f
