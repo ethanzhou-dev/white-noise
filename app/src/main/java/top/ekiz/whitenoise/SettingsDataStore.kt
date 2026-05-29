@@ -11,6 +11,7 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.distinctUntilChanged
 
 import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
@@ -27,6 +28,7 @@ class SettingsDataStore @Inject constructor(@ApplicationContext private val cont
         val SLEEP_TIMER_KEY = intPreferencesKey("sleep_timer")
         val TIMER_END_TIME_KEY = longPreferencesKey("timer_end_time")
         val TIMER_REMAINING_KEY = longPreferencesKey("timer_remaining")
+        val TOTAL_TIMER_MILLIS_KEY = longPreferencesKey("total_timer_millis")
         val BALANCE_KEY = floatPreferencesKey("balance")
         val THEME_MODE_KEY = stringPreferencesKey("theme_mode")
         val SPATIAL_AUDIO_KEY = androidx.datastore.preferences.core.booleanPreferencesKey("spatial_audio")
@@ -35,7 +37,7 @@ class SettingsDataStore @Inject constructor(@ApplicationContext private val cont
     val volumeFlow: Flow<Float> = context.dataStore.data
         .map { preferences ->
             preferences[VOLUME_KEY] ?: 0.5f
-        }
+        }.distinctUntilChanged()
 
     val noiseTypeFlow: Flow<NoiseType> = context.dataStore.data
         .map { preferences ->
@@ -45,25 +47,28 @@ class SettingsDataStore @Inject constructor(@ApplicationContext private val cont
             } catch (e: Exception) {
                 NoiseType.WHITE
             }
-        }
+        }.distinctUntilChanged()
 
     val sleepTimerFlow: Flow<Int> = context.dataStore.data
-        .map { preferences -> preferences[SLEEP_TIMER_KEY] ?: 0 }
+        .map { preferences -> preferences[SLEEP_TIMER_KEY] ?: 0 }.distinctUntilChanged()
 
     val timerEndTimeFlow: Flow<Long> = context.dataStore.data
-        .map { preferences -> preferences[TIMER_END_TIME_KEY] ?: 0L }
+        .map { preferences -> preferences[TIMER_END_TIME_KEY] ?: 0L }.distinctUntilChanged()
 
     val timerRemainingFlow: Flow<Long> = context.dataStore.data
-        .map { preferences -> preferences[TIMER_REMAINING_KEY] ?: 0L }
+        .map { preferences -> preferences[TIMER_REMAINING_KEY] ?: 0L }.distinctUntilChanged()
+
+    val totalTimerMillisFlow: Flow<Long> = context.dataStore.data
+        .map { preferences -> preferences[TOTAL_TIMER_MILLIS_KEY] ?: 0L }.distinctUntilChanged()
 
     val balanceFlow: Flow<Float> = context.dataStore.data
-        .map { preferences -> preferences[BALANCE_KEY] ?: 0f }
+        .map { preferences -> preferences[BALANCE_KEY] ?: 0f }.distinctUntilChanged()
 
     val themeModeFlow: Flow<String> = context.dataStore.data
-        .map { preferences -> preferences[THEME_MODE_KEY] ?: "System" }
+        .map { preferences -> preferences[THEME_MODE_KEY] ?: "System" }.distinctUntilChanged()
 
     val spatialAudioFlow: Flow<Boolean> = context.dataStore.data
-        .map { preferences -> preferences[SPATIAL_AUDIO_KEY] ?: false }
+        .map { preferences -> preferences[SPATIAL_AUDIO_KEY] ?: false }.distinctUntilChanged()
 
     suspend fun saveVolume(volume: Float) {
         context.dataStore.edit { preferences ->
@@ -87,6 +92,10 @@ class SettingsDataStore @Inject constructor(@ApplicationContext private val cont
 
     suspend fun saveTimerRemaining(millis: Long) {
         context.dataStore.edit { preferences -> preferences[TIMER_REMAINING_KEY] = millis }
+    }
+
+    suspend fun saveTotalTimerMillis(millis: Long) {
+        context.dataStore.edit { preferences -> preferences[TOTAL_TIMER_MILLIS_KEY] = millis }
     }
 
     suspend fun saveBalance(balance: Float) {

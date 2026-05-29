@@ -16,7 +16,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.cancel
 import android.media.AudioManager
@@ -32,6 +31,7 @@ import javax.inject.Inject
 class NoiseService : MediaSessionService() {
 
     @Inject lateinit var settingsDataStore: SettingsDataStore
+    @Inject lateinit var timerManager: TimerManager
 
     private var mediaSession: MediaSession? = null
     lateinit var player: ExoPlayer
@@ -41,7 +41,6 @@ class NoiseService : MediaSessionService() {
     private lateinit var audioManager: AudioManager
     private var modeListener: Any? = null
     private var isPausedByCall = false
-    private var timerJob: Job? = null
     private var fadeJob: Job? = null
 
     override fun onCreate() {
@@ -75,8 +74,6 @@ class NoiseService : MediaSessionService() {
                 controller: MediaSession.ControllerInfo
             ): MediaSession.ConnectionResult {
                 val availableCommands = MediaSession.ConnectionResult.DEFAULT_SESSION_AND_LIBRARY_COMMANDS.buildUpon()
-                    .add(SessionCommand("START_SLEEP_TIMER", Bundle.EMPTY))
-                    .add(SessionCommand("CANCEL_SLEEP_TIMER", Bundle.EMPTY))
                     .add(SessionCommand("PLAY_WITH_FADE", Bundle.EMPTY))
                     .add(SessionCommand("PAUSE_WITH_FADE", Bundle.EMPTY))
                     .build()
@@ -92,13 +89,6 @@ class NoiseService : MediaSessionService() {
                 args: Bundle
             ): ListenableFuture<SessionResult> {
                 when (customCommand.customAction) {
-                    "START_SLEEP_TIMER" -> {
-                        val durationMs = args.getLong("DURATION_MS", 0L)
-                        startTimer(durationMs)
-                    }
-                    "CANCEL_SLEEP_TIMER" -> {
-                        cancelTimer()
-                    }
                     "PLAY_WITH_FADE" -> {
                         fadeJob?.cancel()
                         fadeJob = serviceScope.launch {
@@ -153,16 +143,32 @@ class NoiseService : MediaSessionService() {
             launch { settingsDataStore.noiseTypeFlow.collect { noiseProcessor.noiseType = it } }
             launch { settingsDataStore.balanceFlow.collect { noiseProcessor.balance = it } }
             launch { settingsDataStore.spatialAudioFlow.collect { noiseProcessor.isSpatialAudioEnabled = it } }
-        }
-
-        serviceScope.launch {
-            settingsDataStore.timerEndTimeFlow.collectLatest { endTime ->
-                if (endTime > 0L) {
-                    val remaining = endTime - System.currentTimeMillis()
-                    if (remaining > 0) {
-                        // Restore timerJob if we don't have an active one
-                        if (timerJob == null || timerJob?.isActive != true) {
-                            startTimer(remaining)
+            
+            // Listen to Timer events from TimerManager (Single Source of Truth)
+            launch {
+                timerManager.timerEvents.collect { event ->
+                    when (event) {
+                        TimerEvent.START_FADE_OUT -> {
+                            val durationMs = timerManager.activeRemainingMillis.value
+                            if (durationMs > 0 && player.isPlaying) {
+                                fadeJob?.cancel()
+                                fadeJob = serviceScope.launch {
+                                    animatePlayerVolume(player.volume, 0f, durationMs)
+                                }
+                            }
+                        }
+                        TimerEvent.TIMER_FINISHED -> {
+                            player.pause()
+                            player.seekTo(0)
+                            player.volume = 1f
+                        }
+                        TimerEvent.TIMER_CANCELLED -> {
+                            if (player.isPlaying && !isPausedByCall) {
+                                fadeJob?.cancel()
+                                fadeJob = serviceScope.launch {
+                                    animatePlayerVolume(player.volume, 1f, 1000L)
+                                }
+                            }
                         }
                     }
                 }
@@ -170,35 +176,6 @@ class NoiseService : MediaSessionService() {
         }
 
         startCallMonitor()
-    }
-
-    private fun startTimer(durationMs: Long) {
-        timerJob?.cancel()
-        if (durationMs <= 0) return
-        timerJob = serviceScope.launch {
-            if (durationMs > 60000L) {
-                delay(durationMs - 60000L) // Wait until last 60 seconds
-                animatePlayerVolume(1f, 0f, 60000L)
-            } else {
-                animatePlayerVolume(1f, 0f, durationMs)
-            }
-            player.pause()
-            player.seekTo(0)
-            player.volume = 1f
-            
-            // Sync with ViewModel: clear timer state in DataStore
-            settingsDataStore.saveTimerEndTime(0L)
-            settingsDataStore.saveTimerRemaining(0L)
-        }
-    }
-
-    private fun cancelTimer() {
-        timerJob?.cancel()
-        timerJob = null
-        fadeJob?.cancel()
-        fadeJob = serviceScope.launch {
-            animatePlayerVolume(player.volume, 1f, 1000L)
-        }
     }
 
     private fun startCallMonitor() {
@@ -239,6 +216,10 @@ class NoiseService : MediaSessionService() {
     }
 
     private suspend fun animatePlayerVolume(from: Float, to: Float, durationMs: Long) {
+        if (durationMs <= 0L) {
+            player.volume = to
+            return
+        }
         val steps = (durationMs / 20).toInt().coerceAtLeast(1)
         val stepSize = (to - from) / steps
         for (i in 1..steps) {

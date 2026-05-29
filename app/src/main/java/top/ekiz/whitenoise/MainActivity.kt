@@ -134,6 +134,9 @@ fun MainAppScreen(uiState: NoiseUiState, viewModel: NoiseViewModel) {
         contract = ActivityResultContracts.RequestPermission(),
         onResult = { isGranted ->
             hasNotificationPermission = isGranted
+            if (isGranted) {
+                viewModel.togglePlayPause()
+            }
         }
     )
 
