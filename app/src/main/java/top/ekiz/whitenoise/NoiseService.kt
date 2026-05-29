@@ -24,6 +24,9 @@ import androidx.media3.session.SessionCommand
 import androidx.media3.session.SessionResult
 import com.google.common.util.concurrent.Futures
 import com.google.common.util.concurrent.ListenableFuture
+import androidx.media3.common.Player
+import android.media.AudioDeviceCallback
+import android.media.AudioDeviceInfo
 import kotlinx.coroutines.Job
 import javax.inject.Inject
 
@@ -41,7 +44,38 @@ class NoiseService : MediaSessionService() {
     private lateinit var audioManager: AudioManager
     private var modeListener: Any? = null
     private var isPausedByCall = false
+    private var isPausedByDeviceDisconnect = false
     private var fadeJob: Job? = null
+    
+    private val audioDeviceCallback = object : AudioDeviceCallback() {
+        override fun onAudioDevicesAdded(addedDevices: Array<out AudioDeviceInfo>?) {
+            val hasExternalDevice = addedDevices?.any { it.isExternalDevice() } == true
+            if (hasExternalDevice && isPausedByDeviceDisconnect) {
+                isPausedByDeviceDisconnect = false
+                // Play with fade in
+                fadeJob?.cancel()
+                fadeJob = serviceScope.launch {
+                    player.volume = 0f
+                    player.play()
+                    isPausedByCall = false
+                    animatePlayerVolume(0f, 1f, 1000L)
+                }
+            }
+        }
+    }
+
+    private fun AudioDeviceInfo.isExternalDevice(): Boolean {
+        return type == AudioDeviceInfo.TYPE_BLUETOOTH_A2DP ||
+               type == AudioDeviceInfo.TYPE_BLUETOOTH_SCO ||
+               type == AudioDeviceInfo.TYPE_WIRED_HEADSET ||
+               type == AudioDeviceInfo.TYPE_WIRED_HEADPHONES ||
+               type == AudioDeviceInfo.TYPE_USB_HEADSET ||
+               type == AudioDeviceInfo.TYPE_USB_DEVICE ||
+               type == AudioDeviceInfo.TYPE_HEARING_AID ||
+               type == AudioDeviceInfo.TYPE_BLE_HEADSET ||
+               type == AudioDeviceInfo.TYPE_BLE_SPEAKER ||
+               type == AudioDeviceInfo.TYPE_BLE_BROADCAST
+    }
 
     override fun onCreate() {
         super.onCreate()
@@ -66,7 +100,18 @@ class NoiseService : MediaSessionService() {
                     .build(),
                 false // handleAudioFocus = false (智能混音)
             )
+            .setHandleAudioBecomingNoisy(true)
             .build()
+
+        player.addListener(object : Player.Listener {
+            override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) {
+                if (!playWhenReady && reason == Player.PLAY_WHEN_READY_CHANGE_REASON_AUDIO_BECOMING_NOISY) {
+                    isPausedByDeviceDisconnect = true
+                } else if (playWhenReady && reason == Player.PLAY_WHEN_READY_CHANGE_REASON_USER_REQUEST) {
+                    isPausedByDeviceDisconnect = false
+                }
+            }
+        })
 
         val sessionCallback = object : MediaSession.Callback {
             override fun onConnect(
@@ -213,6 +258,7 @@ class NoiseService : MediaSessionService() {
 
     private fun startCallMonitor() {
         audioManager = getSystemService(android.content.Context.AUDIO_SERVICE) as AudioManager
+        audioManager.registerAudioDeviceCallback(audioDeviceCallback, null)
         if (modeListener == null) {
             modeListener = AudioManager.OnModeChangedListener { mode ->
                 val isCallActive = mode == AudioManager.MODE_IN_CALL || 
@@ -267,6 +313,7 @@ class NoiseService : MediaSessionService() {
     }
 
     override fun onDestroy() {
+        audioManager.unregisterAudioDeviceCallback(audioDeviceCallback)
         if (modeListener != null) {
             audioManager.removeOnModeChangedListener(modeListener as AudioManager.OnModeChangedListener)
         }
