@@ -7,6 +7,7 @@ import java.nio.ByteBuffer
 import kotlin.math.max
 import kotlin.math.min
 
+@androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
 class NoiseAudioProcessor : BaseAudioProcessor() {
 
     @Volatile var volume: Float = 0.5f // 0.0 to 1.0

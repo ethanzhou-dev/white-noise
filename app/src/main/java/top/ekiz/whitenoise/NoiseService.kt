@@ -30,6 +30,7 @@ import android.media.AudioDeviceInfo
 import kotlinx.coroutines.Job
 import javax.inject.Inject
 
+@androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
 @AndroidEntryPoint
 class NoiseService : MediaSessionService() {
 
