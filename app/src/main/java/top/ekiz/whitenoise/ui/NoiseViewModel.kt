@@ -97,7 +97,12 @@ class NoiseViewModel @Inject constructor(
 
     fun togglePlayPause() {
         val controller = mediaController ?: return
-        if (controller.isPlaying) {
+        
+        // Optimistic update: immediately flip the state for instant UI response
+        val wasPlaying = _isPlaying.value
+        _isPlaying.value = !wasPlaying
+        
+        if (wasPlaying) {
             controller.sendCustomCommand(SessionCommand("PAUSE_WITH_FADE", Bundle.EMPTY), Bundle.EMPTY)
         } else {
             controller.sendCustomCommand(SessionCommand("PLAY_WITH_FADE", Bundle.EMPTY), Bundle.EMPTY)
