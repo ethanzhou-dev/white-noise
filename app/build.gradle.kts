@@ -11,20 +11,25 @@ android {
 
     defaultConfig {
         applicationId = "top.ekiz.whitenoise"
-        minSdk = 31
+        minSdk = 34
         targetSdk = 34
         versionCode = 1
         versionName = "1.0"
+    }
 
-        vectorDrawables {
-            useSupportLibrary = true
+    signingConfigs {
+        create("release") {
+            storeFile = file("keystore.jks")
+            storePassword = "password"
+            keyAlias = "release"
+            keyPassword = "password"
         }
     }
 
     buildTypes {
         release {
             isMinifyEnabled = true
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = signingConfigs.getByName("release")
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"

@@ -2,7 +2,6 @@ package top.ekiz.whitenoise.ui.screens
 
 import android.Manifest
 import android.content.pm.PackageManager
-import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.padding
@@ -15,7 +14,6 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import androidx.core.content.ContextCompat
 import top.ekiz.whitenoise.ui.NoiseUiState
 import top.ekiz.whitenoise.ui.NoiseViewModel
 
@@ -27,14 +25,7 @@ fun MainAppScreen(uiState: NoiseUiState, viewModel: NoiseViewModel) {
     // Permission handling for notifications (Android 13+)
     var hasNotificationPermission by remember {
         mutableStateOf(
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                ContextCompat.checkSelfPermission(
-                    context,
-                    Manifest.permission.POST_NOTIFICATIONS
-                ) == PackageManager.PERMISSION_GRANTED
-            } else {
-                true
-            }
+            context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
         )
     }
 
@@ -49,7 +40,7 @@ fun MainAppScreen(uiState: NoiseUiState, viewModel: NoiseViewModel) {
     )
 
     fun onPlayPauseClicked() {
-        if (!hasNotificationPermission && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+        if (!hasNotificationPermission) {
             permissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
             return
         }
