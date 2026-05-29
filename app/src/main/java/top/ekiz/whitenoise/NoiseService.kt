@@ -140,7 +140,12 @@ class NoiseService : MediaSessionService() {
 
             // Start collecting ongoing updates
             launch { settingsDataStore.volumeFlow.collect { noiseProcessor.volume = it } }
-            launch { settingsDataStore.noiseTypeFlow.collect { noiseProcessor.noiseType = it } }
+            launch { 
+                settingsDataStore.noiseTypeFlow.collect { 
+                    noiseProcessor.forceImmediateSwitch = !player.isPlaying
+                    noiseProcessor.noiseType = it 
+                } 
+            }
             launch { settingsDataStore.balanceFlow.collect { noiseProcessor.balance = it } }
             launch { settingsDataStore.spatialAudioFlow.collect { noiseProcessor.isSpatialAudioEnabled = it } }
             

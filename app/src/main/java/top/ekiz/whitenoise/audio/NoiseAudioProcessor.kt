@@ -13,6 +13,7 @@ class NoiseAudioProcessor : BaseAudioProcessor() {
     @Volatile var balance: Float = 0f // -1.0 to 1.0
     @Volatile var noiseType: NoiseType = NoiseType.WHITE
     @Volatile var isSpatialAudioEnabled: Boolean = false
+    @Volatile var forceImmediateSwitch: Boolean = false
 
 
     private var currentNoiseType = noiseType
@@ -23,6 +24,7 @@ class NoiseAudioProcessor : BaseAudioProcessor() {
         currentNoiseType = type
         fadingNoiseType = null
         crossfadeProgress = 1f
+        forceImmediateSwitch = false
         stateCurrent.reset()
         stateFadeOut.reset()
     }
@@ -65,15 +67,26 @@ class NoiseAudioProcessor : BaseAudioProcessor() {
         inputBuffer.position(inputBuffer.position() + remaining)
         
         if (currentNoiseType != noiseType) {
-            fadingNoiseType = currentNoiseType
-            
-            val temp = stateFadeOut
-            stateFadeOut = stateCurrent
-            stateCurrent = temp
-            stateCurrent.reset()
-            
-            currentNoiseType = noiseType
-            crossfadeProgress = 0f
+            if (forceImmediateSwitch) {
+                currentNoiseType = noiseType
+                fadingNoiseType = null
+                crossfadeProgress = 1f
+                stateCurrent.reset()
+                stateFadeOut.reset()
+                forceImmediateSwitch = false
+            } else {
+                fadingNoiseType = currentNoiseType
+                
+                val temp = stateFadeOut
+                stateFadeOut = stateCurrent
+                stateCurrent = temp
+                stateCurrent.reset()
+                
+                currentNoiseType = noiseType
+                crossfadeProgress = 0f
+            }
+        } else {
+            forceImmediateSwitch = false
         }
 
         var i = 0
