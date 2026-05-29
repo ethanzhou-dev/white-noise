@@ -15,6 +15,8 @@ class NoiseAudioProcessor : BaseAudioProcessor() {
     @Volatile var isSpatialAudioEnabled: Boolean = false
     @Volatile var forceImmediateSwitch: Boolean = false
 
+    @Volatile var pcmFadeMultiplier: Float = 1f
+    @Volatile private var pcmFadeStep: Float = 0f
 
     private var currentNoiseType = noiseType
     private var fadingNoiseType: NoiseType? = null
@@ -52,6 +54,25 @@ class NoiseAudioProcessor : BaseAudioProcessor() {
         super.onFlush()
         stateCurrent.reset()
         stateFadeOut.reset()
+    }
+
+    fun startFadeIn(durationMs: Long) {
+        if (durationMs <= 0L) {
+            pcmFadeMultiplier = 1f
+            pcmFadeStep = 0f
+            return
+        }
+        pcmFadeMultiplier = 0f
+        val sr = if (inputAudioFormat.sampleRate != -1) {
+            inputAudioFormat.sampleRate
+        } else {
+            44100
+        }
+        // One sample per channel, but we process per frame (1 loop iteration = 1 frame)
+        // Wait, the while loop increments `i` by 1 for L and 1 for R. 
+        // We will increment pcmFadeMultiplier once per frame (while loop iteration).
+        val totalFrames = (durationMs / 1000f) * sr
+        pcmFadeStep = 1f / totalFrames
     }
 
     override fun queueInput(inputBuffer: ByteBuffer) {
@@ -94,10 +115,15 @@ class NoiseAudioProcessor : BaseAudioProcessor() {
         } else {
             forceImmediateSwitch = false
         }
+        val fadeStep = pcmFadeStep
+        var currentFadeMult = pcmFadeMultiplier
 
         var i = 0
         while (i < numShorts) {
-            val effectiveVolume = currentVolume
+            if (currentFadeMult < 1f && fadeStep > 0f) {
+                currentFadeMult = java.lang.Math.min(1f, currentFadeMult + fadeStep)
+            }
+            val effectiveVolume = currentVolume * currentFadeMult
 
             // XorShift64 algorithm for ultra-fast pseudo-random noise (period of ~4.4 million years)
             rngState = rngState xor (rngState shl 13)
@@ -188,6 +214,8 @@ class NoiseAudioProcessor : BaseAudioProcessor() {
                 i++
             }
         }
+        
+        pcmFadeMultiplier = currentFadeMult
         
         buffer.flip()
     }

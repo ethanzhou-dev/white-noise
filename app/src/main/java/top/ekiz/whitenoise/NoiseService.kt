@@ -55,10 +55,13 @@ class NoiseService : MediaSessionService() {
                 // Play with fade in
                 fadeJob?.cancel()
                 fadeJob = serviceScope.launch {
-                    player.volume = 0f
+                    noiseProcessor.startFadeIn(1000L)
+                    flushPlayerBuffer()
                     player.play()
                     isPausedByCall = false
-                    animatePlayerVolume(0f, 1f, 1000L)
+                    // Quick hardware volume ramp (200ms) to suppress any HAL DMA buffer leaks,
+                    // while PCM fade-in (1000ms) provides the artistic smooth start.
+                    animatePlayerVolume(0f, 1f, 200L)
                 }
             }
         }
@@ -137,10 +140,12 @@ class NoiseService : MediaSessionService() {
                     "PLAY_WITH_FADE" -> {
                         fadeJob?.cancel()
                         fadeJob = serviceScope.launch {
-                            player.volume = 0f
+                            noiseProcessor.startFadeIn(1000L)
+                            flushPlayerBuffer()
                             player.play()
                             isPausedByCall = false
-                            animatePlayerVolume(0f, 1f, 1000L)
+                            // Quick hardware volume ramp (200ms) to suppress any HAL DMA buffer leaks
+                            animatePlayerVolume(0f, 1f, 200L)
                         }
                     }
                     "PAUSE_WITH_FADE" -> {
@@ -183,40 +188,29 @@ class NoiseService : MediaSessionService() {
             player.setMediaSource(silenceSource)
             player.prepare()
 
-            // Start collecting ongoing updates
-            val flushIfNotPlaying = {
-                if (!player.isPlaying) {
-                    // ExoPlayer ignores seekTo if the target position equals the current position.
-                    // Since PAUSE_WITH_FADE resets position to 0, seekTo(0) is ignored when paused.
-                    // We seek to 1ms or 0ms to guarantee a buffer flush for the new audio settings.
-                    val targetPos = if (player.currentPosition == 0L) 1L else 0L
-                    player.seekTo(targetPos)
-                }
-            }
-
             launch { 
                 settingsDataStore.volumeFlow.collect { 
                     noiseProcessor.volume = it 
-                    flushIfNotPlaying()
+                    flushPlayerBufferIfNotPlaying()
                 } 
             }
             launch { 
                 settingsDataStore.noiseTypeFlow.collect { 
                     noiseProcessor.forceImmediateSwitch = !player.isPlaying
                     noiseProcessor.noiseType = it 
-                    flushIfNotPlaying()
+                    flushPlayerBufferIfNotPlaying()
                 } 
             }
             launch { 
                 settingsDataStore.balanceFlow.collect { 
                     noiseProcessor.balance = it 
-                    flushIfNotPlaying()
+                    flushPlayerBufferIfNotPlaying()
                 } 
             }
             launch { 
                 settingsDataStore.spatialAudioFlow.collect { 
                     noiseProcessor.isSpatialAudioEnabled = it 
-                    flushIfNotPlaying()
+                    flushPlayerBufferIfNotPlaying()
                 } 
             }
             
@@ -254,6 +248,19 @@ class NoiseService : MediaSessionService() {
         startCallMonitor()
     }
 
+    private fun flushPlayerBuffer() {
+        // ExoPlayer ignores seekTo if the target position equals the current position.
+        // We toggle between 1ms and 0ms to guarantee a pipeline flush for audio settings / fade.
+        val targetPos = if (player.currentPosition == 0L) 1L else 0L
+        player.seekTo(targetPos)
+    }
+
+    private fun flushPlayerBufferIfNotPlaying() {
+        if (!player.isPlaying) {
+            flushPlayerBuffer()
+        }
+    }
+
     private fun startCallMonitor() {
         audioManager = getSystemService(android.content.Context.AUDIO_SERVICE) as AudioManager
         audioManager.registerAudioDeviceCallback(audioDeviceCallback, null)
@@ -283,10 +290,11 @@ class NoiseService : MediaSessionService() {
             if (isPausedByCall) {
                 fadeJob?.cancel()
                 fadeJob = serviceScope.launch {
-                    player.volume = 0f
+                    noiseProcessor.startFadeIn(1000L)
+                    flushPlayerBuffer()
                     player.play()
                     isPausedByCall = false
-                    animatePlayerVolume(0f, 1f, 1000L)
+                    animatePlayerVolume(0f, 1f, 200L)
                 }
             }
         }
