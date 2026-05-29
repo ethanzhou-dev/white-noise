@@ -39,7 +39,7 @@ class NoiseAudioProcessor : BaseAudioProcessor() {
     private var headShadowL = 0f
     private var headShadowR = 0f
 
-    private var rngState = System.nanoTime().toInt().let { if (it == 0) 1 else it }
+    private var rngState: Long = System.nanoTime().let { if (it == 0L) 1L else it }
 
     override fun onConfigure(inputAudioFormat: AudioProcessor.AudioFormat): AudioProcessor.AudioFormat {
         // We output exactly what is requested (SilenceMediaSource will provide 16-bit PCM, usually stereo 44.1kHz or 48kHz)
@@ -80,22 +80,22 @@ class NoiseAudioProcessor : BaseAudioProcessor() {
         while (i < numShorts) {
             val effectiveVolume = currentVolume
 
-            // XorShift32 algorithm for ultra-fast pseudo-random noise
+            // XorShift64 algorithm for ultra-fast pseudo-random noise (period of ~4.4 million years)
             rngState = rngState xor (rngState shl 13)
-            rngState = rngState xor (rngState ushr 17)
-            rngState = rngState xor (rngState shl 5)
-            val centerWhite = (rngState ushr 8).toFloat() * 1.1920929E-7f - 1f
+            rngState = rngState xor (rngState ushr 7)
+            rngState = rngState xor (rngState shl 17)
+            val centerWhite = (rngState ushr 40).toFloat() * 1.1920929E-7f - 1f
 
             rngState = rngState xor (rngState shl 13)
-            rngState = rngState xor (rngState ushr 17)
-            rngState = rngState xor (rngState shl 5)
-            val sideWhiteL = (rngState ushr 8).toFloat() * 1.1920929E-7f - 1f
+            rngState = rngState xor (rngState ushr 7)
+            rngState = rngState xor (rngState shl 17)
+            val sideWhiteL = (rngState ushr 40).toFloat() * 1.1920929E-7f - 1f
 
             val sideWhiteR = if (isStereo) {
                 rngState = rngState xor (rngState shl 13)
-                rngState = rngState xor (rngState ushr 17)
-                rngState = rngState xor (rngState shl 5)
-                (rngState ushr 8).toFloat() * 1.1920929E-7f - 1f
+                rngState = rngState xor (rngState ushr 7)
+                rngState = rngState xor (rngState shl 17)
+                (rngState ushr 40).toFloat() * 1.1920929E-7f - 1f
             } else {
                 sideWhiteL
             }
@@ -174,104 +174,106 @@ class NoiseAudioProcessor : BaseAudioProcessor() {
     }
 
     private class NoiseGeneratorState {
-        var lastBrownOutL = 0f
-        var lastWhiteL = 0f
-        var b0L = 0f; var b1L = 0f; var b2L = 0f; var b3L = 0f; var b4L = 0f; var b5L = 0f; var b6L = 0f
-        var lastBlackOutL = 0f
-        var lastGreenL = 0f
-        var lastWhiteLGreen = 0f
+        var lastBrownOutL = 0.0
+        var lastWhiteL = 0.0
+        var b0L = 0.0; var b1L = 0.0; var b2L = 0.0; var b3L = 0.0; var b4L = 0.0; var b5L = 0.0; var b6L = 0.0
+        var lastBlackOutL = 0.0
+        var lastGreenL = 0.0
+        var lastWhiteLGreen = 0.0
         
-        var lastBrownOutR = 0f
-        var lastWhiteR = 0f
-        var b0R = 0f; var b1R = 0f; var b2R = 0f; var b3R = 0f; var b4R = 0f; var b5R = 0f; var b6R = 0f
-        var lastBlackOutR = 0f
-        var lastGreenR = 0f
-        var lastWhiteRGreen = 0f
+        var lastBrownOutR = 0.0
+        var lastWhiteR = 0.0
+        var b0R = 0.0; var b1R = 0.0; var b2R = 0.0; var b3R = 0.0; var b4R = 0.0; var b5R = 0.0; var b6R = 0.0
+        var lastBlackOutR = 0.0
+        var lastGreenR = 0.0
+        var lastWhiteRGreen = 0.0
 
         var outputL = 0f
         var outputR = 0f
 
         fun reset() {
-            lastBrownOutL = 0f; lastWhiteL = 0f; b0L = 0f; b1L = 0f; b2L = 0f; b3L = 0f; b4L = 0f; b5L = 0f; b6L = 0f; lastBlackOutL = 0f; lastGreenL = 0f; lastWhiteLGreen = 0f
-            lastBrownOutR = 0f; lastWhiteR = 0f; b0R = 0f; b1R = 0f; b2R = 0f; b3R = 0f; b4R = 0f; b5R = 0f; b6R = 0f; lastBlackOutR = 0f; lastGreenR = 0f; lastWhiteRGreen = 0f
+            lastBrownOutL = 0.0; lastWhiteL = 0.0; b0L = 0.0; b1L = 0.0; b2L = 0.0; b3L = 0.0; b4L = 0.0; b5L = 0.0; b6L = 0.0; lastBlackOutL = 0.0; lastGreenL = 0.0; lastWhiteLGreen = 0.0
+            lastBrownOutR = 0.0; lastWhiteR = 0.0; b0R = 0.0; b1R = 0.0; b2R = 0.0; b3R = 0.0; b4R = 0.0; b5R = 0.0; b6R = 0.0; lastBlackOutR = 0.0; lastGreenR = 0.0; lastWhiteRGreen = 0.0
         }
 
         fun process(whiteL: Float, whiteR: Float, type: NoiseType) {
-            var outL = whiteL
-            var outR = whiteR
+            val wL = whiteL.toDouble()
+            val wR = whiteR.toDouble()
+            var outL = wL
+            var outR = wR
 
             when (type) {
                 NoiseType.BROWN -> {
-                    lastBrownOutL = (lastBrownOutL + (0.02f * whiteL)) / 1.02f
-                    outL = lastBrownOutL * 3.5f
+                    lastBrownOutL = (lastBrownOutL + (0.02 * wL)) / 1.02
+                    outL = lastBrownOutL * 3.5
                     
-                    lastBrownOutR = (lastBrownOutR + (0.02f * whiteR)) / 1.02f
-                    outR = lastBrownOutR * 3.5f
+                    lastBrownOutR = (lastBrownOutR + (0.02 * wR)) / 1.02
+                    outR = lastBrownOutR * 3.5
                 }
                 NoiseType.PINK -> {
-                    b0L = 0.99886f * b0L + whiteL * 0.0555179f
-                    b1L = 0.99332f * b1L + whiteL * 0.0750759f
-                    b2L = 0.96900f * b2L + whiteL * 0.1538520f
-                    b3L = 0.86650f * b3L + whiteL * 0.3104856f
-                    b4L = 0.55000f * b4L + whiteL * 0.5329522f
-                    b5L = -0.7616f * b5L - whiteL * 0.0168980f
-                    val pinkL = b0L + b1L + b2L + b3L + b4L + b5L + b6L + whiteL * 0.5362f
-                    b6L = whiteL * 0.115926f
-                    outL = pinkL * 0.11f
+                    b0L = 0.99886 * b0L + wL * 0.0555179
+                    b1L = 0.99332 * b1L + wL * 0.0750759
+                    b2L = 0.96900 * b2L + wL * 0.1538520
+                    b3L = 0.86650 * b3L + wL * 0.3104856
+                    b4L = 0.55000 * b4L + wL * 0.5329522
+                    b5L = -0.7616 * b5L - wL * 0.0168980
+                    val pinkL = b0L + b1L + b2L + b3L + b4L + b5L + b6L + wL * 0.5362
+                    b6L = wL * 0.115926
+                    outL = pinkL * 0.11
                     
-                    b0R = 0.99886f * b0R + whiteR * 0.0555179f
-                    b1R = 0.99332f * b1R + whiteR * 0.0750759f
-                    b2R = 0.96900f * b2R + whiteR * 0.1538520f
-                    b3R = 0.86650f * b3R + whiteR * 0.3104856f
-                    b4R = 0.55000f * b4R + whiteR * 0.5329522f
-                    b5R = -0.7616f * b5R - whiteR * 0.0168980f
-                    val pinkR = b0R + b1R + b2R + b3R + b4R + b5R + b6R + whiteR * 0.5362f
-                    b6R = whiteR * 0.115926f
-                    outR = pinkR * 0.11f
+                    b0R = 0.99886 * b0R + wR * 0.0555179
+                    b1R = 0.99332 * b1R + wR * 0.0750759
+                    b2R = 0.96900 * b2R + wR * 0.1538520
+                    b3R = 0.86650 * b3R + wR * 0.3104856
+                    b4R = 0.55000 * b4R + wR * 0.5329522
+                    b5R = -0.7616 * b5R - wR * 0.0168980
+                    val pinkR = b0R + b1R + b2R + b3R + b4R + b5R + b6R + wR * 0.5362
+                    b6R = wR * 0.115926
+                    outR = pinkR * 0.11
                 }
                 NoiseType.BLUE -> {
-                    outL = (whiteL - lastWhiteL) * 0.5f
-                    outR = (whiteR - lastWhiteR) * 0.5f
+                    outL = (wL - lastWhiteL) * 0.5
+                    outR = (wR - lastWhiteR) * 0.5
                 }
                 NoiseType.VIOLET -> {
-                    outL = (whiteL - lastWhiteL)
-                    outR = (whiteR - lastWhiteR)
+                    outL = (wL - lastWhiteL)
+                    outR = (wR - lastWhiteR)
                 }
                 NoiseType.GREY -> {
-                    lastBrownOutL = (lastBrownOutL + (0.02f * whiteL)) / 1.02f
-                    outL = (lastBrownOutL * 2.0f) + (whiteL - lastWhiteL) * 0.15f
+                    lastBrownOutL = (lastBrownOutL + (0.02 * wL)) / 1.02
+                    outL = (lastBrownOutL * 2.0) + (wL - lastWhiteL) * 0.15
                     
-                    lastBrownOutR = (lastBrownOutR + (0.02f * whiteR)) / 1.02f
-                    outR = (lastBrownOutR * 2.0f) + (whiteR - lastWhiteR) * 0.15f
+                    lastBrownOutR = (lastBrownOutR + (0.02 * wR)) / 1.02
+                    outR = (lastBrownOutR * 2.0) + (wR - lastWhiteR) * 0.15
                 }
                 NoiseType.GREEN -> {
-                    val hpL = whiteL - lastWhiteLGreen
-                    lastWhiteLGreen = whiteL
-                    lastGreenL = (lastGreenL * 0.95f) + hpL * 0.05f
-                    outL = lastGreenL * 15f
+                    val hpL = wL - lastWhiteLGreen
+                    lastWhiteLGreen = wL
+                    lastGreenL = (lastGreenL * 0.95) + hpL * 0.05
+                    outL = lastGreenL * 15.0
                     
-                    val hpR = whiteR - lastWhiteRGreen
-                    lastWhiteRGreen = whiteR
-                    lastGreenR = (lastGreenR * 0.95f) + hpR * 0.05f
-                    outR = lastGreenR * 15f
+                    val hpR = wR - lastWhiteRGreen
+                    lastWhiteRGreen = wR
+                    lastGreenR = (lastGreenR * 0.95) + hpR * 0.05
+                    outR = lastGreenR * 15.0
                 }
                 NoiseType.BLACK -> {
-                    lastBrownOutL = (lastBrownOutL + (0.02f * whiteL)) / 1.02f
-                    lastBlackOutL = (lastBlackOutL + (0.01f * lastBrownOutL)) / 1.01f
-                    outL = lastBlackOutL * 10f
+                    lastBrownOutL = (lastBrownOutL + (0.02 * wL)) / 1.02
+                    lastBlackOutL = (lastBlackOutL + (0.01 * lastBrownOutL)) / 1.01
+                    outL = lastBlackOutL * 10.0
                     
-                    lastBrownOutR = (lastBrownOutR + (0.02f * whiteR)) / 1.02f
-                    lastBlackOutR = (lastBlackOutR + (0.01f * lastBrownOutR)) / 1.01f
-                    outR = lastBlackOutR * 10f
+                    lastBrownOutR = (lastBrownOutR + (0.02 * wR)) / 1.02
+                    lastBlackOutR = (lastBlackOutR + (0.01 * lastBrownOutR)) / 1.01
+                    outR = lastBlackOutR * 10.0
                 }
                 NoiseType.WHITE -> {
                 }
             }
-            lastWhiteL = whiteL
-            lastWhiteR = whiteR
+            lastWhiteL = wL
+            lastWhiteR = wR
             
-            outputL = outL
-            outputR = outR
+            outputL = outL.toFloat()
+            outputR = outR.toFloat()
         }
     }
 }
