@@ -146,10 +146,9 @@ class NoiseService : MediaSessionService() {
                     "PAUSE_WITH_FADE" -> {
                         fadeJob?.cancel()
                         fadeJob = serviceScope.launch {
-                            animatePlayerVolume(1f, 0f, 500L)
+                            animatePlayerVolume(player.volume, 0f, 500L)
                             player.pause()
                             player.seekTo(0)
-                            player.volume = 1f
                             isPausedByCall = false
                         }
                     }
@@ -238,7 +237,6 @@ class NoiseService : MediaSessionService() {
                             fadeJob?.cancel()
                             player.pause()
                             player.seekTo(0)
-                            player.volume = 1f
                         }
                         TimerEvent.TIMER_CANCELLED -> {
                             if (player.isPlaying && !isPausedByCall) {

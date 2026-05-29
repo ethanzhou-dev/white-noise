@@ -48,6 +48,12 @@ class NoiseAudioProcessor : BaseAudioProcessor() {
         return inputAudioFormat
     }
 
+    override fun onFlush() {
+        super.onFlush()
+        stateCurrent.reset()
+        stateFadeOut.reset()
+    }
+
     override fun queueInput(inputBuffer: ByteBuffer) {
         val remaining = inputBuffer.remaining()
         if (remaining == 0) return
