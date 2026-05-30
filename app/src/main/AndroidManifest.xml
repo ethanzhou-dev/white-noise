@@ -31,6 +31,16 @@
                 <action android:name="androidx.media3.session.MediaSessionService" />
             </intent-filter>
         </service>
+        <service
+            android:name=".NoiseTileService"
+            android:label="白噪音"
+            android:icon="@drawable/ic_qs_tile"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE" />
+            </intent-filter>
+        </service>
             
     </application>
 </manifest>
