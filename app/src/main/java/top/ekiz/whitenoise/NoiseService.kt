@@ -54,16 +54,7 @@ class NoiseService : MediaSessionService() {
             if (hasExternalDevice && isPausedByDeviceDisconnect) {
                 isPausedByDeviceDisconnect = false
                 // Play with fade in
-                fadeJob?.cancel()
-                fadeJob = serviceScope.launch {
-                    noiseProcessor.startFadeIn(1000L)
-                    flushPlayerBuffer()
-                    player.play()
-                    isPausedByCall = false
-                    // Quick hardware volume ramp (200ms) to suppress any HAL DMA buffer leaks,
-                    // while PCM fade-in (1000ms) provides the artistic smooth start.
-                    animatePlayerVolume(0f, 1f, 200L)
-                }
+                resumePlaybackWithFade()
             }
         }
     }
@@ -139,15 +130,7 @@ class NoiseService : MediaSessionService() {
             ): ListenableFuture<SessionResult> {
                 when (customCommand.customAction) {
                     "PLAY_WITH_FADE" -> {
-                        fadeJob?.cancel()
-                        fadeJob = serviceScope.launch {
-                            noiseProcessor.startFadeIn(1000L)
-                            flushPlayerBuffer()
-                            player.play()
-                            isPausedByCall = false
-                            // Quick hardware volume ramp (200ms) to suppress any HAL DMA buffer leaks
-                            animatePlayerVolume(0f, 1f, 200L)
-                        }
+                        resumePlaybackWithFade()
                     }
                     "PAUSE_WITH_FADE" -> {
                         fadeJob?.cancel()
@@ -289,15 +272,25 @@ class NoiseService : MediaSessionService() {
             }
         } else {
             if (isPausedByCall) {
-                fadeJob?.cancel()
-                fadeJob = serviceScope.launch {
-                    noiseProcessor.startFadeIn(1000L)
-                    flushPlayerBuffer()
-                    player.play()
-                    isPausedByCall = false
-                    animatePlayerVolume(0f, 1f, 200L)
-                }
+                resumePlaybackWithFade()
             }
+        }
+    }
+
+    private fun resumePlaybackWithFade() {
+        fadeJob?.cancel()
+        fadeJob = serviceScope.launch {
+            noiseProcessor.startFadeIn(1000L)
+            flushPlayerBuffer()
+            if (player.playbackState == Player.STATE_IDLE || 
+                player.playbackState == Player.STATE_ENDED || 
+                player.playerError != null) {
+                player.prepare()
+            }
+            player.play()
+            isPausedByCall = false
+            // Quick hardware volume ramp (200ms) to suppress any HAL DMA buffer leaks
+            animatePlayerVolume(0f, 1f, 200L)
         }
     }
 

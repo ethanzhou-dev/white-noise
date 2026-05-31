@@ -50,12 +50,27 @@ class NoiseTileService : TileService() {
         super.onClick()
         val controller = mediaController
         if (controller != null) {
-            val isPlaying = controller.isPlaying
-            if (isPlaying) {
-                controller.sendCustomCommand(SessionCommand("PAUSE_WITH_FADE", Bundle.EMPTY), Bundle.EMPTY)
-            } else {
-                controller.sendCustomCommand(SessionCommand("PLAY_WITH_FADE", Bundle.EMPTY), Bundle.EMPTY)
-            }
+            togglePlay(controller)
+        } else {
+            controllerFuture?.addListener({
+                val futureController = try {
+                    controllerFuture?.get()
+                } catch (e: Exception) {
+                    null
+                }
+                if (futureController != null) {
+                    togglePlay(futureController)
+                }
+            }, MoreExecutors.directExecutor())
+        }
+    }
+
+    private fun togglePlay(controller: MediaController) {
+        val isPlaying = controller.isPlaying
+        if (isPlaying) {
+            controller.sendCustomCommand(SessionCommand("PAUSE_WITH_FADE", Bundle.EMPTY), Bundle.EMPTY)
+        } else {
+            controller.sendCustomCommand(SessionCommand("PLAY_WITH_FADE", Bundle.EMPTY), Bundle.EMPTY)
         }
     }
 
