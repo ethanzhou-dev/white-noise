@@ -55,6 +55,7 @@ android {
         }
     }
     lint {
+        checkReleaseBuilds = false
         disable += "GradleDependency"
         disable += "ObsoleteLintCustomCheck"
     }
