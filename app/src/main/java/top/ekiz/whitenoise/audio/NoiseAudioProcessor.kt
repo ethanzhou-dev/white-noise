@@ -244,6 +244,25 @@ class NoiseAudioProcessor : BaseAudioProcessor() {
         var greyLx1R = 0.0; var greyLx2R = 0.0; var greyLy1R = 0.0; var greyLy2R = 0.0
         var greyHx1R = 0.0; var greyHx2R = 0.0; var greyHy1R = 0.0; var greyHy2R = 0.0
 
+        // Velvet
+        var velvetCounterL = 0
+        var velvetGridL = 22
+        var velvetPulseL = 0.0
+        var velvetCounterR = 0
+        var velvetGridR = 22
+        var velvetPulseR = 0.0
+
+        // Ocean Waves
+        var oceanPhase = 0.0
+        var oceanLpfL = 0.0
+        var oceanLpfR = 0.0
+        var lastOceanBrownL = 0.0
+        var lastOceanBrownR = 0.0
+
+        // Binaural Beats
+        var binauralPhaseL = 0.0
+        var binauralPhaseR = 0.0
+
         var outputL = 0f
         var outputR = 0f
 
@@ -259,6 +278,11 @@ class NoiseAudioProcessor : BaseAudioProcessor() {
             greyLx1R = 0.0; greyLx2R = 0.0; greyLy1R = 0.0; greyLy2R = 0.0
             greyHx1L = 0.0; greyHx2L = 0.0; greyHy1L = 0.0; greyHy2L = 0.0
             greyHx1R = 0.0; greyHx2R = 0.0; greyHy1R = 0.0; greyHy2R = 0.0
+
+            velvetCounterL = 0; velvetPulseL = 0.0
+            velvetCounterR = 0; velvetPulseR = 0.0
+            oceanPhase = 0.0; oceanLpfL = 0.0; oceanLpfR = 0.0; lastOceanBrownL = 0.0; lastOceanBrownR = 0.0
+            binauralPhaseL = 0.0; binauralPhaseR = 0.0
         }
 
         fun process(whiteL: Float, whiteR: Float, type: NoiseType) {
@@ -376,6 +400,56 @@ class NoiseAudioProcessor : BaseAudioProcessor() {
                     outR = lastBlackOutR * 10.0
                 }
                 NoiseType.WHITE -> {
+                }
+                NoiseType.VELVET -> {
+                    velvetCounterL++
+                    if (velvetCounterL >= velvetGridL) {
+                        velvetCounterL = 0
+                        velvetGridL = 15 + ((wL + 1.0) * 0.5 * 15.0).toInt()
+                        velvetPulseL = if (wL > 0) 1.0 else -1.0
+                    } else {
+                        velvetPulseL = 0.0
+                    }
+                    outL = velvetPulseL
+                    
+                    velvetCounterR++
+                    if (velvetCounterR >= velvetGridR) {
+                        velvetCounterR = 0
+                        velvetGridR = 15 + ((wR + 1.0) * 0.5 * 15.0).toInt()
+                        velvetPulseR = if (wR > 0) 1.0 else -1.0
+                    } else {
+                        velvetPulseR = 0.0
+                    }
+                    outR = velvetPulseR
+                }
+                NoiseType.OCEAN_WAVES -> {
+                    lastOceanBrownL = (lastOceanBrownL + (0.02 * wL)) / 1.02
+                    lastOceanBrownR = (lastOceanBrownR + (0.02 * wR)) / 1.02
+                    
+                    oceanPhase += 2.0 * Math.PI / 352800.0
+                    if (oceanPhase > 2.0 * Math.PI) oceanPhase -= 2.0 * Math.PI
+                    val lfo = kotlin.math.sin(oceanPhase)
+                    
+                    val fc = 825.0 + 675.0 * lfo
+                    val alpha = 2.0 * Math.PI * fc / 44100.0
+                    
+                    oceanLpfL += alpha * (lastOceanBrownL * 3.5 - oceanLpfL)
+                    oceanLpfR += alpha * (lastOceanBrownR * 3.5 - oceanLpfR)
+                    
+                    val amp = 0.15 + 0.85 * (lfo * 0.5 + 0.5) * (lfo * 0.5 + 0.5)
+                    
+                    outL = oceanLpfL * amp
+                    outR = oceanLpfR * amp
+                }
+                NoiseType.BINAURAL_BEATS -> {
+                    binauralPhaseL += 2.0 * Math.PI * 198.0 / 44100.0
+                    if (binauralPhaseL > 2.0 * Math.PI) binauralPhaseL -= 2.0 * Math.PI
+                    
+                    binauralPhaseR += 2.0 * Math.PI * 202.0 / 44100.0
+                    if (binauralPhaseR > 2.0 * Math.PI) binauralPhaseR -= 2.0 * Math.PI
+                    
+                    outL = kotlin.math.sin(binauralPhaseL) * 0.5
+                    outR = kotlin.math.sin(binauralPhaseR) * 0.5
                 }
             }
             lastWhiteL = wL

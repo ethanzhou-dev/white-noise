@@ -11,18 +11,12 @@ import top.ekiz.whitenoise.NoiseType
 import top.ekiz.whitenoise.ui.components.NoiseCard
 
 @Composable
-fun SoundsScreen(innerPadding: PaddingValues, currentType: NoiseType, onTypeSelected: (NoiseType) -> Unit) {
-    val noises = listOf(
-        Pair(NoiseType.BLACK, "黑噪音"),
-        Pair(NoiseType.DEEP_BROWN, "深棕噪音"),
-        Pair(NoiseType.BROWN, "棕噪音"),
-        Pair(NoiseType.PINK, "粉噪音"),
-        Pair(NoiseType.WHITE, "白噪音"),
-        Pair(NoiseType.BLUE, "蓝噪音"),
-        Pair(NoiseType.VIOLET, "紫噪音"),
-        Pair(NoiseType.GREEN, "绿噪音"),
-        Pair(NoiseType.GREY, "灰噪音")
-    )
+fun SoundsScreen(
+    innerPadding: PaddingValues, 
+    currentType: NoiseType, 
+    noises: List<Pair<NoiseType, String>>,
+    onTypeSelected: (NoiseType) -> Unit
+) {
 
     LazyColumn(
         contentPadding = PaddingValues(
