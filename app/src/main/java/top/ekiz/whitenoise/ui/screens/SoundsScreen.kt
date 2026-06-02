@@ -14,6 +14,7 @@ import top.ekiz.whitenoise.ui.components.NoiseCard
 fun SoundsScreen(innerPadding: PaddingValues, currentType: NoiseType, onTypeSelected: (NoiseType) -> Unit) {
     val noises = listOf(
         Pair(NoiseType.BLACK, "黑噪音"),
+        Pair(NoiseType.DEEP_BROWN, "深棕噪音"),
         Pair(NoiseType.BROWN, "棕噪音"),
         Pair(NoiseType.PINK, "粉噪音"),
         Pair(NoiseType.WHITE, "白噪音"),

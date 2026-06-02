@@ -223,6 +223,7 @@ class NoiseAudioProcessor : BaseAudioProcessor() {
 
     private class NoiseGeneratorState {
         var lastBrownOutL = 0.0
+        var lastDeepBrownOutL = 0.0
         var lastWhiteL = 0.0
         var b0L = 0.0; var b1L = 0.0; var b2L = 0.0; var b3L = 0.0; var b4L = 0.0; var b5L = 0.0; var b6L = 0.0
         var b0BlueL = 0.0; var b1BlueL = 0.0; var b2BlueL = 0.0; var b3BlueL = 0.0; var b4BlueL = 0.0; var b5BlueL = 0.0; var b6BlueL = 0.0
@@ -233,6 +234,7 @@ class NoiseAudioProcessor : BaseAudioProcessor() {
         var greyHx1L = 0.0; var greyHx2L = 0.0; var greyHy1L = 0.0; var greyHy2L = 0.0
         
         var lastBrownOutR = 0.0
+        var lastDeepBrownOutR = 0.0
         var lastWhiteR = 0.0
         var b0R = 0.0; var b1R = 0.0; var b2R = 0.0; var b3R = 0.0; var b4R = 0.0; var b5R = 0.0; var b6R = 0.0
         var b0BlueR = 0.0; var b1BlueR = 0.0; var b2BlueR = 0.0; var b3BlueR = 0.0; var b4BlueR = 0.0; var b5BlueR = 0.0; var b6BlueR = 0.0
@@ -246,8 +248,8 @@ class NoiseAudioProcessor : BaseAudioProcessor() {
         var outputR = 0f
 
         fun reset() {
-            lastBrownOutL = 0.0; lastWhiteL = 0.0; b0L = 0.0; b1L = 0.0; b2L = 0.0; b3L = 0.0; b4L = 0.0; b5L = 0.0; b6L = 0.0; lastBlackOutL = 0.0
-            lastBrownOutR = 0.0; lastWhiteR = 0.0; b0R = 0.0; b1R = 0.0; b2R = 0.0; b3R = 0.0; b4R = 0.0; b5R = 0.0; b6R = 0.0; lastBlackOutR = 0.0
+            lastBrownOutL = 0.0; lastDeepBrownOutL = 0.0; lastWhiteL = 0.0; b0L = 0.0; b1L = 0.0; b2L = 0.0; b3L = 0.0; b4L = 0.0; b5L = 0.0; b6L = 0.0; lastBlackOutL = 0.0
+            lastBrownOutR = 0.0; lastDeepBrownOutR = 0.0; lastWhiteR = 0.0; b0R = 0.0; b1R = 0.0; b2R = 0.0; b3R = 0.0; b4R = 0.0; b5R = 0.0; b6R = 0.0; lastBlackOutR = 0.0
             b0BlueL = 0.0; b1BlueL = 0.0; b2BlueL = 0.0; b3BlueL = 0.0; b4BlueL = 0.0; b5BlueL = 0.0; b6BlueL = 0.0; lastBluePinkL = 0.0
             b0BlueR = 0.0; b1BlueR = 0.0; b2BlueR = 0.0; b3BlueR = 0.0; b4BlueR = 0.0; b5BlueR = 0.0; b6BlueR = 0.0; lastBluePinkR = 0.0
             
@@ -272,6 +274,13 @@ class NoiseAudioProcessor : BaseAudioProcessor() {
                     
                     lastBrownOutR = (lastBrownOutR + (0.02 * wR)) / 1.02
                     outR = lastBrownOutR * 3.5
+                }
+                NoiseType.DEEP_BROWN -> {
+                    lastDeepBrownOutL = (lastDeepBrownOutL + (0.01 * wL)) / 1.01
+                    outL = lastDeepBrownOutL * 5.0
+                    
+                    lastDeepBrownOutR = (lastDeepBrownOutR + (0.01 * wR)) / 1.01
+                    outR = lastDeepBrownOutR * 5.0
                 }
                 NoiseType.PINK -> {
                     b0L = 0.99886 * b0L + wL * 0.0555179
