@@ -228,8 +228,9 @@ class NoiseAudioProcessor : BaseAudioProcessor() {
         var b0BlueL = 0.0; var b1BlueL = 0.0; var b2BlueL = 0.0; var b3BlueL = 0.0; var b4BlueL = 0.0; var b5BlueL = 0.0; var b6BlueL = 0.0
         var lastBluePinkL = 0.0
         var lastBlackOutL = 0.0
-        var lastGreenL = 0.0
-        var lastWhiteLGreen = 0.0
+        var greenX1L = 0.0; var greenX2L = 0.0; var greenY1L = 0.0; var greenY2L = 0.0
+        var greyLx1L = 0.0; var greyLx2L = 0.0; var greyLy1L = 0.0; var greyLy2L = 0.0
+        var greyHx1L = 0.0; var greyHx2L = 0.0; var greyHy1L = 0.0; var greyHy2L = 0.0
         
         var lastBrownOutR = 0.0
         var lastWhiteR = 0.0
@@ -237,17 +238,25 @@ class NoiseAudioProcessor : BaseAudioProcessor() {
         var b0BlueR = 0.0; var b1BlueR = 0.0; var b2BlueR = 0.0; var b3BlueR = 0.0; var b4BlueR = 0.0; var b5BlueR = 0.0; var b6BlueR = 0.0
         var lastBluePinkR = 0.0
         var lastBlackOutR = 0.0
-        var lastGreenR = 0.0
-        var lastWhiteRGreen = 0.0
+        var greenX1R = 0.0; var greenX2R = 0.0; var greenY1R = 0.0; var greenY2R = 0.0
+        var greyLx1R = 0.0; var greyLx2R = 0.0; var greyLy1R = 0.0; var greyLy2R = 0.0
+        var greyHx1R = 0.0; var greyHx2R = 0.0; var greyHy1R = 0.0; var greyHy2R = 0.0
 
         var outputL = 0f
         var outputR = 0f
 
         fun reset() {
-            lastBrownOutL = 0.0; lastWhiteL = 0.0; b0L = 0.0; b1L = 0.0; b2L = 0.0; b3L = 0.0; b4L = 0.0; b5L = 0.0; b6L = 0.0; lastBlackOutL = 0.0; lastGreenL = 0.0; lastWhiteLGreen = 0.0
-            lastBrownOutR = 0.0; lastWhiteR = 0.0; b0R = 0.0; b1R = 0.0; b2R = 0.0; b3R = 0.0; b4R = 0.0; b5R = 0.0; b6R = 0.0; lastBlackOutR = 0.0; lastGreenR = 0.0; lastWhiteRGreen = 0.0
+            lastBrownOutL = 0.0; lastWhiteL = 0.0; b0L = 0.0; b1L = 0.0; b2L = 0.0; b3L = 0.0; b4L = 0.0; b5L = 0.0; b6L = 0.0; lastBlackOutL = 0.0
+            lastBrownOutR = 0.0; lastWhiteR = 0.0; b0R = 0.0; b1R = 0.0; b2R = 0.0; b3R = 0.0; b4R = 0.0; b5R = 0.0; b6R = 0.0; lastBlackOutR = 0.0
             b0BlueL = 0.0; b1BlueL = 0.0; b2BlueL = 0.0; b3BlueL = 0.0; b4BlueL = 0.0; b5BlueL = 0.0; b6BlueL = 0.0; lastBluePinkL = 0.0
             b0BlueR = 0.0; b1BlueR = 0.0; b2BlueR = 0.0; b3BlueR = 0.0; b4BlueR = 0.0; b5BlueR = 0.0; b6BlueR = 0.0; lastBluePinkR = 0.0
+            
+            greenX1L = 0.0; greenX2L = 0.0; greenY1L = 0.0; greenY2L = 0.0
+            greenX1R = 0.0; greenX2R = 0.0; greenY1R = 0.0; greenY2R = 0.0
+            greyLx1L = 0.0; greyLx2L = 0.0; greyLy1L = 0.0; greyLy2L = 0.0
+            greyLx1R = 0.0; greyLx2R = 0.0; greyLy1R = 0.0; greyLy2R = 0.0
+            greyHx1L = 0.0; greyHx2L = 0.0; greyHy1L = 0.0; greyHy2L = 0.0
+            greyHx1R = 0.0; greyHx2R = 0.0; greyHy1R = 0.0; greyHy2R = 0.0
         }
 
         fun process(whiteL: Float, whiteR: Float, type: NoiseType) {
@@ -313,26 +322,40 @@ class NoiseAudioProcessor : BaseAudioProcessor() {
                     outR = (wR - lastWhiteR)
                 }
                 NoiseType.GREY -> {
-                    lastBrownOutL = (lastBrownOutL + (0.02 * wL)) / 1.02
-                    lastBlackOutL = (lastBlackOutL + (0.02 * lastBrownOutL)) / 1.02
-                    outL = (lastBlackOutL * 10.0) + (wL - lastWhiteL) * 0.1
+                    // Inverse A-Weighting Approximation via Biquad Shelving Filters
+                    // 1. Low Shelf (Fc=250Hz, Gain=+15dB)
+                    val midL = 1.02268 * wL - 1.96607 * greyLx1L + 0.94636 * greyLx2L + 1.96728 * greyLy1L - 0.96781 * greyLy2L
+                    greyLx2L = greyLx1L; greyLx1L = wL
+                    greyLy2L = greyLy1L; greyLy1L = midL
                     
-                    lastBrownOutR = (lastBrownOutR + (0.02 * wR)) / 1.02
-                    lastBlackOutR = (lastBlackOutR + (0.02 * lastBrownOutR)) / 1.02
-                    outR = (lastBlackOutR * 10.0) + (wR - lastWhiteR) * 0.1
+                    // 2. High Shelf (Fc=8000Hz, Gain=+8dB)
+                    val outY_L = 1.78054 * midL - 1.33301 * greyHx1L + 0.48501 * greyHx2L + 0.25003 * greyHy1L - 0.18257 * greyHy2L
+                    greyHx2L = greyHx1L; greyHx1L = midL
+                    greyHy2L = greyHy1L; greyHy1L = outY_L
+                    
+                    outL = outY_L * 0.12 // Attenuate to avoid clipping
+                    
+                    val midR = 1.02268 * wR - 1.96607 * greyLx1R + 0.94636 * greyLx2R + 1.96728 * greyLy1R - 0.96781 * greyLy2R
+                    greyLx2R = greyLx1R; greyLx1R = wR
+                    greyLy2R = greyLy1R; greyLy1R = midR
+                    
+                    val outY_R = 1.78054 * midR - 1.33301 * greyHx1R + 0.48501 * greyHx2R + 0.25003 * greyHy1R - 0.18257 * greyHy2R
+                    greyHx2R = greyHx1R; greyHx1R = midR
+                    greyHy2R = greyHy1R; greyHy1R = outY_R
+                    
+                    outR = outY_R * 0.12
                 }
                 NoiseType.GREEN -> {
-                    // Standard Green Noise: Band-pass filter around 500Hz (human vocal range / nature)
-                    // 1. Wide Low-Pass to remove harsh hiss (fc ~ 3000Hz)
-                    lastGreenL = (lastGreenL * 0.6) + (wL * 0.4)
-                    // 2. Narrow Low-Pass to capture sub-rumble (fc ~ 250Hz)
-                    lastWhiteLGreen = (lastWhiteLGreen * 0.97) + (lastGreenL * 0.03)
-                    // 3. Band-Pass = Wide LP - Narrow LP
-                    outL = (lastGreenL - lastWhiteLGreen) * 2.5
+                    // Butterworth Bandpass (Fc=500Hz, Q=0.5, Fs=44100Hz)
+                    val outY_L = 0.066447 * wL - 0.066447 * greenX2L + 1.862368 * greenY1L - 0.867096 * greenY2L
+                    greenX2L = greenX1L; greenX1L = wL
+                    greenY2L = greenY1L; greenY1L = outY_L
+                    outL = outY_L * 4.0 // Gain compensation
                     
-                    lastGreenR = (lastGreenR * 0.6) + (wR * 0.4)
-                    lastWhiteRGreen = (lastWhiteRGreen * 0.97) + (lastGreenR * 0.03)
-                    outR = (lastGreenR - lastWhiteRGreen) * 2.5
+                    val outY_R = 0.066447 * wR - 0.066447 * greenX2R + 1.862368 * greenY1R - 0.867096 * greenY2R
+                    greenX2R = greenX1R; greenX1R = wR
+                    greenY2R = greenY1R; greenY1R = outY_R
+                    outR = outY_R * 4.0
                 }
                 NoiseType.BLACK -> {
                     lastBrownOutL = (lastBrownOutL + (0.02 * wL)) / 1.02
