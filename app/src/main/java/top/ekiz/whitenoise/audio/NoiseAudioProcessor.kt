@@ -36,18 +36,24 @@ class NoiseAudioProcessor : BaseAudioProcessor() {
     private var stateFadeOut = NoiseGeneratorState()
     
     private var crossfadeProgress = 1f
-    private val crossfadeStep = 1f / (44100f * 1.5f) // 1.5s crossfade
+    private var crossfadeStep = 1f / (44100f * 1.5f) // 1.5s crossfade
 
     // Spatial Audio (Binaural) state
     private var lfoPhase: Double = 0.0
-    private val lfoStep: Double = 2.0 * Math.PI * 0.05 / 44100.0 // 0.05 Hz
+    private var lfoStep: Double = 2.0 * Math.PI * 0.05 / 44100.0 // 0.05 Hz
     private var headShadowL = 0f
     private var headShadowR = 0f
 
     private var rngState: Long = System.nanoTime().let { if (it == 0L) 1L else it }
 
     override fun onConfigure(inputAudioFormat: AudioProcessor.AudioFormat): AudioProcessor.AudioFormat {
-        // We output exactly what is requested (SilenceMediaSource will provide 16-bit PCM, usually stereo 44.1kHz or 48kHz)
+        val sr = inputAudioFormat.sampleRate
+        if (sr > 0) {
+            crossfadeStep = 1f / (sr.toFloat() * 1.5f)
+            lfoStep = 2.0 * Math.PI * 0.05 / sr.toDouble()
+            stateCurrent.updateSampleRate(sr.toDouble())
+            stateFadeOut.updateSampleRate(sr.toDouble())
+        }
         return inputAudioFormat
     }
 
@@ -266,6 +272,54 @@ class NoiseAudioProcessor : BaseAudioProcessor() {
         var outputL = 0f
         var outputR = 0f
 
+        var sampleRate = 44100.0
+        
+        var greenB0 = 0.066447
+        var greenB2 = -0.066447
+        var greenA1 = -1.862368
+        var greenA2 = 0.867096
+        
+        var greyL_b0 = 1.02268; var greyL_b1 = -1.96607; var greyL_b2 = 0.94636; var greyL_a1 = -1.96728; var greyL_a2 = 0.96781
+        var greyH_b0 = 1.78054; var greyH_b1 = -1.33301; var greyH_b2 = 0.48501; var greyH_a1 = -0.25003; var greyH_a2 = 0.18257
+
+        fun updateSampleRate(sr: Double) {
+            if (sampleRate == sr || sr <= 0.0) return
+            sampleRate = sr
+            
+            // Green (Butterworth Bandpass, Fc=500Hz, Q=0.5)
+            val w0G = 2.0 * Math.PI * 500.0 / sr
+            val alphaG = Math.sin(w0G) / 1.0 // Q=0.5 -> 2.0 * Q = 1.0
+            val a0G = 1.0 + alphaG
+            greenB0 = alphaG / a0G
+            greenB2 = -alphaG / a0G
+            greenA1 = -2.0 * Math.cos(w0G) / a0G
+            greenA2 = (1.0 - alphaG) / a0G
+
+            // Grey Low Shelf (Fc=250Hz, Gain=15dB)
+            val aL = Math.pow(10.0, 15.0 / 40.0)
+            val w0L = 2.0 * Math.PI * 250.0 / sr
+            val alphaL = Math.sin(w0L) / Math.sqrt(2.0)
+            val cosW0L = Math.cos(w0L)
+            val a0L = (aL + 1.0) + (aL - 1.0) * cosW0L + 2.0 * Math.sqrt(aL) * alphaL
+            greyL_b0 = (aL * ((aL + 1.0) - (aL - 1.0) * cosW0L + 2.0 * Math.sqrt(aL) * alphaL)) / a0L
+            greyL_b1 = (2.0 * aL * ((aL - 1.0) - (aL + 1.0) * cosW0L)) / a0L
+            greyL_b2 = (aL * ((aL + 1.0) - (aL - 1.0) * cosW0L - 2.0 * Math.sqrt(aL) * alphaL)) / a0L
+            greyL_a1 = (-2.0 * ((aL - 1.0) + (aL + 1.0) * cosW0L)) / a0L
+            greyL_a2 = ((aL + 1.0) + (aL - 1.0) * cosW0L - 2.0 * Math.sqrt(aL) * alphaL) / a0L
+
+            // Grey High Shelf (Fc=8000Hz, Gain=8dB)
+            val aH = Math.pow(10.0, 8.0 / 40.0)
+            val w0H = 2.0 * Math.PI * 8000.0 / sr
+            val alphaH = Math.sin(w0H) / Math.sqrt(2.0)
+            val cosW0H = Math.cos(w0H)
+            val a0H = (aH + 1.0) - (aH - 1.0) * cosW0H + 2.0 * Math.sqrt(aH) * alphaH
+            greyH_b0 = (aH * ((aH + 1.0) + (aH - 1.0) * cosW0H + 2.0 * Math.sqrt(aH) * alphaH)) / a0H
+            greyH_b1 = (-2.0 * aH * ((aH - 1.0) + (aH + 1.0) * cosW0H)) / a0H
+            greyH_b2 = (aH * ((aH + 1.0) + (aH - 1.0) * cosW0H - 2.0 * Math.sqrt(aH) * alphaH)) / a0H
+            greyH_a1 = (2.0 * ((aH - 1.0) - (aH + 1.0) * cosW0H)) / a0H
+            greyH_a2 = ((aH + 1.0) - (aH - 1.0) * cosW0H - 2.0 * Math.sqrt(aH) * alphaH) / a0H
+        }
+
         fun reset() {
             lastBrownOutL = 0.0; lastDeepBrownOutL = 0.0; lastWhiteL = 0.0; b0L = 0.0; b1L = 0.0; b2L = 0.0; b3L = 0.0; b4L = 0.0; b5L = 0.0; b6L = 0.0; lastBlackOutL = 0.0
             lastBrownOutR = 0.0; lastDeepBrownOutR = 0.0; lastWhiteR = 0.0; b0R = 0.0; b1R = 0.0; b2R = 0.0; b3R = 0.0; b4R = 0.0; b5R = 0.0; b6R = 0.0; lastBlackOutR = 0.0
@@ -357,35 +411,35 @@ class NoiseAudioProcessor : BaseAudioProcessor() {
                 NoiseType.GREY -> {
                     // Inverse A-Weighting Approximation via Biquad Shelving Filters
                     // 1. Low Shelf (Fc=250Hz, Gain=+15dB)
-                    val midL = 1.02268 * wL - 1.96607 * greyLx1L + 0.94636 * greyLx2L + 1.96728 * greyLy1L - 0.96781 * greyLy2L
+                    val midL = greyL_b0 * wL + greyL_b1 * greyLx1L + greyL_b2 * greyLx2L - greyL_a1 * greyLy1L - greyL_a2 * greyLy2L
                     greyLx2L = greyLx1L; greyLx1L = wL
                     greyLy2L = greyLy1L; greyLy1L = midL
                     
                     // 2. High Shelf (Fc=8000Hz, Gain=+8dB)
-                    val outY_L = 1.78054 * midL - 1.33301 * greyHx1L + 0.48501 * greyHx2L + 0.25003 * greyHy1L - 0.18257 * greyHy2L
+                    val outY_L = greyH_b0 * midL + greyH_b1 * greyHx1L + greyH_b2 * greyHx2L - greyH_a1 * greyHy1L - greyH_a2 * greyHy2L
                     greyHx2L = greyHx1L; greyHx1L = midL
                     greyHy2L = greyHy1L; greyHy1L = outY_L
                     
                     outL = outY_L * 0.12 // Attenuate to avoid clipping
                     
-                    val midR = 1.02268 * wR - 1.96607 * greyLx1R + 0.94636 * greyLx2R + 1.96728 * greyLy1R - 0.96781 * greyLy2R
+                    val midR = greyL_b0 * wR + greyL_b1 * greyLx1R + greyL_b2 * greyLx2R - greyL_a1 * greyLy1R - greyL_a2 * greyLy2R
                     greyLx2R = greyLx1R; greyLx1R = wR
                     greyLy2R = greyLy1R; greyLy1R = midR
                     
-                    val outY_R = 1.78054 * midR - 1.33301 * greyHx1R + 0.48501 * greyHx2R + 0.25003 * greyHy1R - 0.18257 * greyHy2R
+                    val outY_R = greyH_b0 * midR + greyH_b1 * greyHx1R + greyH_b2 * greyHx2R - greyH_a1 * greyHy1R - greyH_a2 * greyHy2R
                     greyHx2R = greyHx1R; greyHx1R = midR
                     greyHy2R = greyHy1R; greyHy1R = outY_R
                     
                     outR = outY_R * 0.12
                 }
                 NoiseType.GREEN -> {
-                    // Butterworth Bandpass (Fc=500Hz, Q=0.5, Fs=44100Hz)
-                    val outY_L = 0.066447 * wL - 0.066447 * greenX2L + 1.862368 * greenY1L - 0.867096 * greenY2L
+                    // Butterworth Bandpass (Fc=500Hz, Q=0.5, Fs dynamically updated)
+                    val outY_L = greenB0 * wL + greenB2 * greenX2L - greenA1 * greenY1L - greenA2 * greenY2L
                     greenX2L = greenX1L; greenX1L = wL
                     greenY2L = greenY1L; greenY1L = outY_L
                     outL = outY_L * 4.0 // Gain compensation
                     
-                    val outY_R = 0.066447 * wR - 0.066447 * greenX2R + 1.862368 * greenY1R - 0.867096 * greenY2R
+                    val outY_R = greenB0 * wR + greenB2 * greenX2R - greenA1 * greenY1R - greenA2 * greenY2R
                     greenX2R = greenX1R; greenX1R = wR
                     greenY2R = greenY1R; greenY1R = outY_R
                     outR = outY_R * 4.0
@@ -426,12 +480,12 @@ class NoiseAudioProcessor : BaseAudioProcessor() {
                     lastOceanBrownL = (lastOceanBrownL + (0.02 * wL)) / 1.02
                     lastOceanBrownR = (lastOceanBrownR + (0.02 * wR)) / 1.02
                     
-                    oceanPhase += 2.0 * Math.PI / 352800.0
+                    oceanPhase += 2.0 * Math.PI / (8.0 * sampleRate)
                     if (oceanPhase > 2.0 * Math.PI) oceanPhase -= 2.0 * Math.PI
                     val lfo = kotlin.math.sin(oceanPhase)
                     
                     val fc = 825.0 + 675.0 * lfo
-                    val alpha = 2.0 * Math.PI * fc / 44100.0
+                    val alpha = 2.0 * Math.PI * fc / sampleRate
                     
                     oceanLpfL += alpha * (lastOceanBrownL * 3.5 - oceanLpfL)
                     oceanLpfR += alpha * (lastOceanBrownR * 3.5 - oceanLpfR)
@@ -442,10 +496,10 @@ class NoiseAudioProcessor : BaseAudioProcessor() {
                     outR = oceanLpfR * amp
                 }
                 NoiseType.BINAURAL_BEATS -> {
-                    binauralPhaseL += 2.0 * Math.PI * 198.0 / 44100.0
+                    binauralPhaseL += 2.0 * Math.PI * 198.0 / sampleRate
                     if (binauralPhaseL > 2.0 * Math.PI) binauralPhaseL -= 2.0 * Math.PI
                     
-                    binauralPhaseR += 2.0 * Math.PI * 202.0 / 44100.0
+                    binauralPhaseR += 2.0 * Math.PI * 202.0 / sampleRate
                     if (binauralPhaseR > 2.0 * Math.PI) binauralPhaseR -= 2.0 * Math.PI
                     
                     outL = kotlin.math.sin(binauralPhaseL) * 0.5
