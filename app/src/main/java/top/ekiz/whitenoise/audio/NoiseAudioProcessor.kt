@@ -271,6 +271,17 @@ class NoiseAudioProcessor : BaseAudioProcessor() {
         var binauralPhaseL = 0.0
         var binauralPhaseR = 0.0
 
+        // Wind
+        var windFcTargetL = 400.0; var windFcL = 400.0; var windLpf1L = 0.0; var windLpf2L = 0.0; var windLpf3L = 0.0
+        var windFcTargetR = 400.0; var windFcR = 400.0; var windLpf1R = 0.0; var windLpf2R = 0.0; var windLpf3R = 0.0
+
+        // Airplane Cabin
+        var cabinPhase = 0.0
+        
+        // Heartbeat
+        var heartPhase = 0.0
+        var heartTonePhase = 0.0
+
         var outputL = 0f
         var outputR = 0f
 
@@ -339,6 +350,10 @@ class NoiseAudioProcessor : BaseAudioProcessor() {
             velvetCounterR = 0; velvetPulseR = 0.0; velvetLpfR = 0.0
             oceanPhase = 0.0; oceanLpfL = 0.0; oceanLpfR = 0.0; lastOceanBrownL = 0.0; lastOceanBrownR = 0.0
             binauralPhaseL = 0.0; binauralPhaseR = 0.0
+            windFcTargetL = 400.0; windFcL = 400.0; windLpf1L = 0.0; windLpf2L = 0.0; windLpf3L = 0.0
+            windFcTargetR = 400.0; windFcR = 400.0; windLpf1R = 0.0; windLpf2R = 0.0; windLpf3R = 0.0
+            cabinPhase = 0.0
+            heartPhase = 0.0; heartTonePhase = 0.0
         }
 
         fun process(whiteL: Float, whiteR: Float, type: NoiseType) {
@@ -508,6 +523,63 @@ class NoiseAudioProcessor : BaseAudioProcessor() {
                     
                     outL = kotlin.math.sin(binauralPhaseL) * 0.5
                     outR = kotlin.math.sin(binauralPhaseR) * 0.5
+                }
+                NoiseType.WIND -> {
+                    // Wind synthesis via random walking resonant low-pass filter
+                    windFcTargetL += wL * 5.0
+                    if (windFcTargetL < 150.0) windFcTargetL = 150.0
+                    if (windFcTargetL > 1000.0) windFcTargetL = 1000.0
+                    windFcL += (windFcTargetL - windFcL) * (20.0 / sampleRate)
+                    val alphaL = 2.0 * Math.PI * windFcL / sampleRate
+                    windLpf1L += alphaL * (wL - windLpf1L)
+                    windLpf2L += alphaL * (windLpf1L - windLpf2L)
+                    windLpf3L += alphaL * (windLpf2L - windLpf3L)
+                    outL = windLpf3L * 25.0
+                    
+                    windFcTargetR += wR * 5.0
+                    if (windFcTargetR < 150.0) windFcTargetR = 150.0
+                    if (windFcTargetR > 1000.0) windFcTargetR = 1000.0
+                    windFcR += (windFcTargetR - windFcR) * (20.0 / sampleRate)
+                    val alphaR = 2.0 * Math.PI * windFcR / sampleRate
+                    windLpf1R += alphaR * (wR - windLpf1R)
+                    windLpf2R += alphaR * (windLpf1R - windLpf2R)
+                    windLpf3R += alphaR * (windLpf2R - windLpf3R)
+                    outR = windLpf3R * 25.0
+                }
+                NoiseType.AIRPLANE_CABIN -> {
+                    // Deep brown noise drone with a low frequency sine wave hum
+                    lastDeepBrownOutL = (lastDeepBrownOutL + (0.01 * wL)) / 1.01
+                    lastDeepBrownOutR = (lastDeepBrownOutR + (0.01 * wR)) / 1.01
+                    
+                    cabinPhase += 2.0 * Math.PI * 160.0 / sampleRate
+                    if (cabinPhase > 2.0 * Math.PI) cabinPhase -= 2.0 * Math.PI
+                    val drone = kotlin.math.sin(cabinPhase) * 0.2
+                    
+                    outL = lastDeepBrownOutL * 4.0 + drone
+                    outR = lastDeepBrownOutR * 4.0 + drone
+                }
+                NoiseType.HEARTBEAT -> {
+                    // Simulates 60 BPM (1 beat per second) heartbeats using two enveloped sines
+                    heartPhase += 1.0 / sampleRate
+                    if (heartPhase > 1.0) heartPhase -= 1.0
+                    
+                    var env = 0.0
+                    var freq = 50.0
+                    if (heartPhase < 0.15) { // Lub (150ms)
+                        env = kotlin.math.sin(heartPhase / 0.15 * Math.PI)
+                        freq = 60.0 - (heartPhase / 0.15) * 20.0
+                    } else if (heartPhase > 0.3 && heartPhase < 0.4) { // Dub (100ms)
+                        env = kotlin.math.sin((heartPhase - 0.3) / 0.1 * Math.PI) * 0.8
+                        freq = 55.0 - ((heartPhase - 0.3) / 0.1) * 15.0
+                    }
+                    
+                    heartTonePhase += 2.0 * Math.PI * freq / sampleRate
+                    if (heartTonePhase > 2.0 * Math.PI) heartTonePhase -= 2.0 * Math.PI
+                    
+                    val tone = kotlin.math.sin(heartTonePhase) * env * 0.85
+                    
+                    outL = tone
+                    outR = tone
                 }
             }
             lastWhiteL = wL

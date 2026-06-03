@@ -66,7 +66,10 @@ fun MainAppScreen(uiState: NoiseUiState, viewModel: NoiseViewModel) {
     val otherNoises = listOf(
         Pair(NoiseType.VELVET, "天鹅绒噪音"),
         Pair(NoiseType.OCEAN_WAVES, "海浪声"),
-        Pair(NoiseType.BINAURAL_BEATS, "双耳节拍")
+        Pair(NoiseType.BINAURAL_BEATS, "双耳节拍"),
+        Pair(NoiseType.WIND, "风声"),
+        Pair(NoiseType.AIRPLANE_CABIN, "飞机机舱"),
+        Pair(NoiseType.HEARTBEAT, "心跳声")
     )
 
     Scaffold(
