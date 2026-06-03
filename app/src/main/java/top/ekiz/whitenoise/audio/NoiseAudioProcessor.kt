@@ -254,9 +254,11 @@ class NoiseAudioProcessor : BaseAudioProcessor() {
         var velvetCounterL = 0
         var velvetGridL = 22
         var velvetPulseL = 0.0
+        var velvetLpfL = 0.0
         var velvetCounterR = 0
         var velvetGridR = 22
         var velvetPulseR = 0.0
+        var velvetLpfR = 0.0
 
         // Ocean Waves
         var oceanPhase = 0.0
@@ -333,8 +335,8 @@ class NoiseAudioProcessor : BaseAudioProcessor() {
             greyHx1L = 0.0; greyHx2L = 0.0; greyHy1L = 0.0; greyHy2L = 0.0
             greyHx1R = 0.0; greyHx2R = 0.0; greyHy1R = 0.0; greyHy2R = 0.0
 
-            velvetCounterL = 0; velvetPulseL = 0.0
-            velvetCounterR = 0; velvetPulseR = 0.0
+            velvetCounterL = 0; velvetPulseL = 0.0; velvetLpfL = 0.0
+            velvetCounterR = 0; velvetPulseR = 0.0; velvetLpfR = 0.0
             oceanPhase = 0.0; oceanLpfL = 0.0; oceanLpfR = 0.0; lastOceanBrownL = 0.0; lastOceanBrownR = 0.0
             binauralPhaseL = 0.0; binauralPhaseR = 0.0
         }
@@ -464,7 +466,8 @@ class NoiseAudioProcessor : BaseAudioProcessor() {
                     } else {
                         velvetPulseL = 0.0
                     }
-                    outL = velvetPulseL
+                    velvetLpfL = (velvetLpfL + (0.05 * velvetPulseL)) / 1.05
+                    outL = velvetLpfL * 2.5
                     
                     velvetCounterR++
                     if (velvetCounterR >= velvetGridR) {
@@ -474,7 +477,8 @@ class NoiseAudioProcessor : BaseAudioProcessor() {
                     } else {
                         velvetPulseR = 0.0
                     }
-                    outR = velvetPulseR
+                    velvetLpfR = (velvetLpfR + (0.05 * velvetPulseR)) / 1.05
+                    outR = velvetLpfR * 2.5
                 }
                 NoiseType.OCEAN_WAVES -> {
                     lastOceanBrownL = (lastOceanBrownL + (0.02 * wL)) / 1.02
