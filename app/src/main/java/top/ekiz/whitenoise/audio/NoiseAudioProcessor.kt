@@ -272,8 +272,9 @@ class NoiseAudioProcessor : BaseAudioProcessor() {
         var binauralPhaseR = 0.0
 
         // Wind
-        var windFcTargetL = 400.0; var windFcL = 400.0; var windLpf1L = 0.0; var windLpf2L = 0.0; var windLpf3L = 0.0
-        var windFcTargetR = 400.0; var windFcR = 400.0; var windLpf1R = 0.0; var windLpf2R = 0.0; var windLpf3R = 0.0
+        var windLfo = 0.0
+        var windSvfLpL = 0.0; var windSvfBpL = 0.0
+        var windSvfLpR = 0.0; var windSvfBpR = 0.0
 
         // Airplane Cabin
         var cabinPhase = 0.0
@@ -350,8 +351,7 @@ class NoiseAudioProcessor : BaseAudioProcessor() {
             velvetCounterR = 0; velvetPulseR = 0.0; velvetLpfR = 0.0
             oceanPhase = 0.0; oceanLpfL = 0.0; oceanLpfR = 0.0; lastOceanBrownL = 0.0; lastOceanBrownR = 0.0
             binauralPhaseL = 0.0; binauralPhaseR = 0.0
-            windFcTargetL = 400.0; windFcL = 400.0; windLpf1L = 0.0; windLpf2L = 0.0; windLpf3L = 0.0
-            windFcTargetR = 400.0; windFcR = 400.0; windLpf1R = 0.0; windLpf2R = 0.0; windLpf3R = 0.0
+            windLfo = 0.0; windSvfLpL = 0.0; windSvfBpL = 0.0; windSvfLpR = 0.0; windSvfBpR = 0.0
             cabinPhase = 0.0
             heartPhase = 0.0; heartTonePhase = 0.0
         }
@@ -525,26 +525,54 @@ class NoiseAudioProcessor : BaseAudioProcessor() {
                     outR = kotlin.math.sin(binauralPhaseR) * 0.5
                 }
                 NoiseType.WIND -> {
-                    // Wind synthesis via random walking resonant low-pass filter
-                    windFcTargetL += wL * 5.0
-                    if (windFcTargetL < 150.0) windFcTargetL = 150.0
-                    if (windFcTargetL > 1000.0) windFcTargetL = 1000.0
-                    windFcL += (windFcTargetL - windFcL) * (20.0 / sampleRate)
-                    val alphaL = 2.0 * Math.PI * windFcL / sampleRate
-                    windLpf1L += alphaL * (wL - windLpf1L)
-                    windLpf2L += alphaL * (windLpf1L - windLpf2L)
-                    windLpf3L += alphaL * (windLpf2L - windLpf3L)
-                    outL = windLpf3L * 25.0
+                    // 1. Organic Random Gust Modulation
+                    // Lowered to 0.15Hz for very slow, sweeping gentle breezes (was 0.5Hz)
+                    val alpha = 2.0 * Math.PI * 0.15 / sampleRate
+                    windLfo += alpha * (wL - windLfo)
                     
-                    windFcTargetR += wR * 5.0
-                    if (windFcTargetR < 150.0) windFcTargetR = 150.0
-                    if (windFcTargetR > 1000.0) windFcTargetR = 1000.0
-                    windFcR += (windFcTargetR - windFcR) * (20.0 / sampleRate)
-                    val alphaR = 2.0 * Math.PI * windFcR / sampleRate
-                    windLpf1R += alphaR * (wR - windLpf1R)
-                    windLpf2R += alphaR * (windLpf1R - windLpf2R)
-                    windLpf3R += alphaR * (windLpf2R - windLpf3R)
-                    outR = windLpf3R * 25.0
+                    // Reduced amplification (from 300 to 80) to prevent sharp, sudden gusts.
+                    // This keeps the transitions smooth and rolling instead of square-like.
+                    val gustAmplified = windLfo * 80.0
+                    val softGust = gustAmplified / (1.0 + kotlin.math.abs(gustAmplified))
+                    
+                    val gust01 = softGust * 0.5 + 0.5 // Map to 0..1
+                    
+                    // 2. Relaxing Cutoff Frequency
+                    // Lowered max frequency: 80Hz (deep rumble) to 250Hz (soft breeze).
+                    // Prevents the "hissing" sound that mimics strong wind.
+                    val baseFc = 80.0 + gust01 * gust01 * 170.0
+                    
+                    // Removed audio-rate white noise modulation (+ wL * 10.0) which caused 
+                    // the "tearing/clipping" mic capsule distortion effect.
+                    val fcL = baseFc
+                    val fcR = baseFc
+                    
+                    // 3. No Resonance (No Howling)
+                    // Damping of 1.414 equals a Q of 0.707 (Butterworth flat response)
+                    // This eliminates the "spooky ghost" whistle completely
+                    val damping = 1.414 
+                    
+                    // 4. State Variable Filter (SVF) Processing
+                    // Small angle approximation: sin(x) ≈ x for low frequencies (< 500Hz).
+                    // This avoids expensive Math.sin() calls per sample, maximizing performance.
+                    val pi_over_sr = Math.PI / sampleRate
+                    
+                    // Left Channel
+                    val fL = 2.0 * (fcL * pi_over_sr)
+                    val hpL = wL - windSvfLpL - damping * windSvfBpL
+                    windSvfBpL += fL * hpL
+                    windSvfLpL += fL * windSvfBpL
+                    
+                    // Right Channel
+                    val fR = 2.0 * (fcR * pi_over_sr)
+                    val hpR = wR - windSvfLpR - damping * windSvfBpR
+                    windSvfBpR += fR * hpR
+                    windSvfLpR += fR * windSvfBpR
+                    
+                    // 5. Output Mixing
+                    // Only output the lowpass (warm rumble) to avoid harsh screeching
+                    outL = windSvfLpL * 10.0
+                    outR = windSvfLpR * 10.0
                 }
                 NoiseType.AIRPLANE_CABIN -> {
                     // Deep brown noise drone with a low frequency sine wave hum
