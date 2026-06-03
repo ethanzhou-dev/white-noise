@@ -6,11 +6,11 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.Palette
+import androidx.compose.material.icons.filled.Forest
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.filled.List
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
@@ -95,13 +95,13 @@ fun MainAppScreen(uiState: NoiseUiState, viewModel: NoiseViewModel) {
         bottomBar = {
             NavigationBar {
                 NavigationBarItem(
-                    icon = { Icon(Icons.Filled.Home, contentDescription = "颜色") },
+                    icon = { Icon(Icons.Filled.Palette, contentDescription = "颜色") },
                     label = { Text("颜色") },
                     selected = selectedTab == 0,
                     onClick = { selectedTab = 0 }
                 )
                 NavigationBarItem(
-                    icon = { Icon(Icons.Filled.List, contentDescription = "其他") },
+                    icon = { Icon(Icons.Filled.Forest, contentDescription = "其他") },
                     label = { Text("其他") },
                     selected = selectedTab == 1,
                     onClick = { selectedTab = 1 }

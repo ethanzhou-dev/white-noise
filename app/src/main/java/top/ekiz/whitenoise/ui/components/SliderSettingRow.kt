@@ -5,7 +5,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.unit.dp
+import top.ekiz.whitenoise.ui.theme.spacing
 
 @Composable
 fun SliderSettingRow(
@@ -26,7 +26,7 @@ fun SliderSettingRow(
             )
         },
         supportingContent = {
-            Column(modifier = Modifier.padding(top = 8.dp)) {
+            Column(modifier = Modifier.padding(top = MaterialTheme.spacing.small)) {
                 Slider(
                     value = value,
                     onValueChange = onValueChange,
@@ -36,7 +36,7 @@ fun SliderSettingRow(
                 )
                 if (labels != null) {
                     Row(
-                        modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp),
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = MaterialTheme.spacing.small),
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
                         labels.forEach { label ->

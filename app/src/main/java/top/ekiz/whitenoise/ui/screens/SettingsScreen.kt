@@ -5,14 +5,15 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.VolumeUp
-import androidx.compose.material.icons.filled.Headset
+import androidx.compose.material.icons.filled.Tune
+import androidx.compose.material.icons.filled.SurroundSound
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.StrokeCap
-import androidx.compose.ui.unit.dp
+import top.ekiz.whitenoise.ui.theme.spacing
 import top.ekiz.whitenoise.ui.components.SliderSettingRow
 import java.util.Calendar
 
@@ -41,7 +42,7 @@ fun SettingsScreen(
             text = "音频控制",
             style = MaterialTheme.typography.labelLarge,
             color = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.padding(start = 16.dp, top = 24.dp, bottom = 8.dp)
+            modifier = Modifier.padding(start = MaterialTheme.spacing.medium, top = MaterialTheme.spacing.large, bottom = MaterialTheme.spacing.small)
         )
         
         SliderSettingRow(
@@ -53,7 +54,7 @@ fun SettingsScreen(
         )
         
         SliderSettingRow(
-            icon = Icons.Filled.Headset,
+            icon = Icons.Filled.Tune,
             contentDescription = "左右耳平衡",
             value = balance,
             onValueChange = onBalanceChanged,
@@ -61,14 +62,14 @@ fun SettingsScreen(
             labels = listOf("偏左", "居中", "偏右")
         )
         
-        HorizontalDivider(modifier = Modifier.padding(vertical = 16.dp))
+        HorizontalDivider(modifier = Modifier.padding(vertical = MaterialTheme.spacing.medium))
 
         // 定时关闭模块
         Text(
             text = "定时关闭",
             style = MaterialTheme.typography.labelLarge,
             color = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.padding(start = 16.dp, top = 8.dp, bottom = 8.dp)
+            modifier = Modifier.padding(start = MaterialTheme.spacing.medium, top = MaterialTheme.spacing.small, bottom = MaterialTheme.spacing.small)
         )
         
         var showTimePicker by remember { mutableStateOf(false) }
@@ -138,12 +139,12 @@ fun SettingsScreen(
             )
         }
         
-        Column(modifier = Modifier.padding(horizontal = 16.dp)) {
+        Column(modifier = Modifier.padding(horizontal = MaterialTheme.spacing.medium)) {
             val isPaused = !isTimerRunning && remainingTimeMillis > 0L
 
             Row(
-                modifier = Modifier.fillMaxWidth().padding(top = 16.dp),
-                horizontalArrangement = Arrangement.spacedBy(16.dp)
+                modifier = Modifier.fillMaxWidth().padding(top = MaterialTheme.spacing.medium),
+                horizontalArrangement = Arrangement.spacedBy(MaterialTheme.spacing.medium)
             ) {
                 Button(
                     onClick = onStartTimer,
@@ -182,34 +183,33 @@ fun SettingsScreen(
                 val progress = if (totalForProgress > 0) (remainingTimeMillis.toFloat() / totalForProgress.toFloat()).coerceIn(0f, 1f) else 0f
                 val remainingMinutes = remainingTimeMillis / 60000
                 val remainingSeconds = (remainingTimeMillis % 60000) / 1000
-                Spacer(modifier = Modifier.height(16.dp))
+                Spacer(modifier = Modifier.height(MaterialTheme.spacing.medium))
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                     Text("剩余时间: ${"%02d:%02d".format(remainingMinutes, remainingSeconds)}", style = MaterialTheme.typography.bodyMedium)
                     Text("${(progress * 100).toInt()}%", style = MaterialTheme.typography.bodyMedium)
                 }
                 LinearProgressIndicator(
                     progress = { progress },
-                    modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+                    modifier = Modifier.fillMaxWidth().padding(top = MaterialTheme.spacing.small),
                     strokeCap = StrokeCap.Round
                 )
             }
         }
 
-        HorizontalDivider(modifier = Modifier.padding(vertical = 16.dp))
+        HorizontalDivider(modifier = Modifier.padding(vertical = MaterialTheme.spacing.medium))
 
         Text(
             text = "高级功能",
             style = MaterialTheme.typography.labelLarge,
             color = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.padding(start = 16.dp, top = 8.dp, bottom = 8.dp)
+            modifier = Modifier.padding(start = MaterialTheme.spacing.medium, top = MaterialTheme.spacing.small, bottom = MaterialTheme.spacing.small)
         )
 
         ListItem(
             headlineContent = { Text("3D 空间音频 (双耳渲染)") },
-            supportingContent = { Text("开启后，白噪音会在脑海周围缓慢环绕，增强沉浸感和放松效果。") },
             leadingContent = {
                 Icon(
-                    imageVector = Icons.Filled.Headset,
+                    imageVector = Icons.Filled.SurroundSound,
                     contentDescription = "空间音频"
                 )
             },
@@ -221,16 +221,16 @@ fun SettingsScreen(
             }
         )
 
-        HorizontalDivider(modifier = Modifier.padding(vertical = 16.dp))
+        HorizontalDivider(modifier = Modifier.padding(vertical = MaterialTheme.spacing.medium))
 
         Text(
             text = "外观与显示",
             style = MaterialTheme.typography.labelLarge,
             color = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.padding(start = 16.dp, top = 8.dp, bottom = 16.dp)
+            modifier = Modifier.padding(start = MaterialTheme.spacing.medium, top = MaterialTheme.spacing.small, bottom = MaterialTheme.spacing.medium)
         )
         
-        Box(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp), contentAlignment = Alignment.Center) {
+        Box(modifier = Modifier.fillMaxWidth().padding(horizontal = MaterialTheme.spacing.medium), contentAlignment = Alignment.Center) {
             val options = listOf("System" to "跟随系统", "Light" to "浅色", "Dark" to "深色")
             SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
                 options.forEachIndexed { index, (mode, label) ->
@@ -245,6 +245,6 @@ fun SettingsScreen(
             }
         }
         
-        Spacer(modifier = Modifier.height(32.dp))
+        Spacer(modifier = Modifier.height(MaterialTheme.spacing.extraLarge))
     }
 }
