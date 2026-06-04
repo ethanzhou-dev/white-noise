@@ -2,35 +2,46 @@ package top.ekiz.whitenoise.audio.generators
 
 class OceanWavesGenerator : NoiseGenerator() {
     private var oceanPhase = 0.0
-    private var oceanLpfL = 0.0
-    private var oceanLpfR = 0.0
-    private var lastOceanBrownL = 0.0
-    private var lastOceanBrownR = 0.0
+    private var lastPinkOutL = 0.0
+    private var lastPinkOutR = 0.0
+    private var phaseInc = 0.0
+
+    private val pink = PinkNoiseGenerator()
+
+    init {
+        updateSampleRate(44100.0)
+    }
+
+    override fun updateSampleRate(sr: Double) {
+        super.updateSampleRate(sr)
+        pink.updateSampleRate(sr)
+        phaseInc = 0.08 / sr
+    }
 
     override fun reset() {
-        oceanPhase = 0.0; oceanLpfL = 0.0; oceanLpfR = 0.0; lastOceanBrownL = 0.0; lastOceanBrownR = 0.0
+        oceanPhase = 0.0
+        lastPinkOutL = 0.0
+        lastPinkOutR = 0.0
+        pink.reset()
+    }
+
+    // Fast 0 to 1 smooth wave mimicking (sin(x)+1)/2
+    private fun smoothWave(phase: Double): Double {
+        val tri = if (phase < 0.5) phase * 2.0 else 2.0 - phase * 2.0
+        return tri * tri * (3.0 - 2.0 * tri)
     }
 
     override fun process(whiteL: Float, whiteR: Float) {
-        val wL = whiteL.toDouble()
-        val wR = whiteR.toDouble()
-
-        lastOceanBrownL = (lastOceanBrownL + (0.02 * wL)) / 1.02
-        lastOceanBrownR = (lastOceanBrownR + (0.02 * wR)) / 1.02
+        pink.process(whiteL, whiteR)
         
-        oceanPhase += 2.0 * Math.PI / (8.0 * sampleRate)
-        if (oceanPhase > 2.0 * Math.PI) oceanPhase -= 2.0 * Math.PI
-        val lfo = kotlin.math.sin(oceanPhase)
+        oceanPhase += phaseInc
+        if (oceanPhase >= 1.0) oceanPhase -= 1.0
         
-        val fc = 825.0 + 675.0 * lfo
-        val alpha = 2.0 * Math.PI * fc / sampleRate
+        val smooth = smoothWave(oceanPhase)
+        // map smooth (0 to 1) to volume envelope (0.1 to 1.0)
+        val envelope = smooth * 0.9 + 0.1
         
-        oceanLpfL += alpha * (lastOceanBrownL * 3.5 - oceanLpfL)
-        oceanLpfR += alpha * (lastOceanBrownR * 3.5 - oceanLpfR)
-        
-        val amp = 0.15 + 0.85 * (lfo * 0.5 + 0.5) * (lfo * 0.5 + 0.5)
-        
-        outL = (oceanLpfL * amp).toFloat()
-        outR = (oceanLpfR * amp).toFloat()
+        outL = (pink.outL * envelope).toFloat()
+        outR = (pink.outR * envelope).toFloat()
     }
 }

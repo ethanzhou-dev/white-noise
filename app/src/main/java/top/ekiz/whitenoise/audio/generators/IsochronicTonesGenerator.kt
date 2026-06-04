@@ -1,32 +1,46 @@
 package top.ekiz.whitenoise.audio.generators
 
+import kotlin.math.PI
 import kotlin.math.sin
 
 class IsochronicTonesGenerator : NoiseGenerator() {
-    private var carrierPhase = 0.0
     private var modPhase = 0.0
+    private var carrierPhase = 0.0
+    private var modInc = 0.0
+    private var carrierInc = 0.0
+
+    init {
+        updateSampleRate(44100.0)
+    }
+
+    override fun updateSampleRate(sr: Double) {
+        super.updateSampleRate(sr)
+        // Isochronic tones: Carrier frequency pulsed on and off at a specific rate
+        // E.g., 200 Hz carrier, 4 Hz pulse (Theta waves)
+        modInc = 4.0 / sr // phase runs 0 to 1
+        carrierInc = 2.0 * PI * 200.0 / sr
+    }
 
     override fun reset() {
-        carrierPhase = 0.0
         modPhase = 0.0
+        carrierPhase = 0.0
+    }
+
+    // Fast 0 to 1 smooth wave mimicking (sin(x)+1)/2
+    private fun smoothWave(phase: Double): Double {
+        val tri = if (phase < 0.5) phase * 2.0 else 2.0 - phase * 2.0
+        return tri * tri * (3.0 - 2.0 * tri)
     }
 
     override fun process(whiteL: Float, whiteR: Float) {
-        val carrierFreq = 200.0
-        val modFreq = 10.0
-
-        carrierPhase += 2.0 * Math.PI * carrierFreq / sampleRate
-        if (carrierPhase > 2.0 * Math.PI) carrierPhase -= 2.0 * Math.PI
+        modPhase += modInc
+        if (modPhase >= 1.0) modPhase -= 1.0
         
-        modPhase += 2.0 * Math.PI * modFreq / sampleRate
-        if (modPhase > 2.0 * Math.PI) modPhase -= 2.0 * Math.PI
+        carrierPhase += carrierInc
+        if (carrierPhase > 2.0 * PI) carrierPhase -= 2.0 * PI
         
-        // Raised sine wave for smooth modulation: (sin(phase) + 1) / 2
-        // ranges from 0 to 1
-        val envelope = (sin(modPhase) + 1.0) / 2.0
+        val envelope = smoothWave(modPhase)
         
-        // Output sine wave amplitude modulated by envelope
-        // Base sine wave max amplitude is 0.5 to prevent too loud output
         val output = (sin(carrierPhase) * 0.5 * envelope).toFloat()
         
         outL = output
