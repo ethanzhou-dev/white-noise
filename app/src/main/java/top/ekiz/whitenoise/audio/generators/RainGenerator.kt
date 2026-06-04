@@ -1,22 +1,22 @@
 package top.ekiz.whitenoise.audio.generators
 
-import kotlin.random.Random
+import kotlin.math.sin
 
 class RainGenerator : NoiseGenerator() {
     private var pinkB0 = 0.0; private var pinkB1 = 0.0; private var pinkB2 = 0.0
     private var pinkB3 = 0.0; private var pinkB4 = 0.0; private var pinkB5 = 0.0; private var pinkB6 = 0.0
 
-    private var hissLpSvf1 = 0.0; private var hissLpSvf2 = 0.0
-    
-    private var dropEnvL = 0.0; private var dropEnvR = 0.0
-    private var dropBp1L = 0.0; private var dropBp2L = 0.0
-    private var dropBp1R = 0.0; private var dropBp2R = 0.0
+    private var lp1L = 0.0; private var lp2L = 0.0
+    private var lp1R = 0.0; private var lp2R = 0.0
+
+    private var gustLfoPhase = 0.0
+    private var splatterLfoPhaseL = 0.0
+    private var splatterLfoPhaseR = 0.0
 
     override fun reset() {
         pinkB0 = 0.0; pinkB1 = 0.0; pinkB2 = 0.0; pinkB3 = 0.0; pinkB4 = 0.0; pinkB5 = 0.0; pinkB6 = 0.0
-        hissLpSvf1 = 0.0; hissLpSvf2 = 0.0
-        dropEnvL = 0.0; dropEnvR = 0.0
-        dropBp1L = 0.0; dropBp2L = 0.0; dropBp1R = 0.0; dropBp2R = 0.0
+        lp1L = 0.0; lp2L = 0.0; lp1R = 0.0; lp2R = 0.0
+        gustLfoPhase = 0.0; splatterLfoPhaseL = 0.0; splatterLfoPhaseR = 0.0
     }
 
     override fun process(whiteL: Float, whiteR: Float) {
@@ -33,50 +33,48 @@ class RainGenerator : NoiseGenerator() {
         pinkB5 = -0.7616 * pinkB5 - wMono * 0.0168980
         val pinkOut = pinkB0 + pinkB1 + pinkB2 + pinkB3 + pinkB4 + pinkB5 + pinkB6 + wMono * 0.5362
         pinkB6 = wMono * 0.115926
-        val normalizedPink = pinkOut * 0.11
-        
-        // 2. Lowpass filter the pink noise for distant rain (SVF ~1200Hz)
+        val pink = pinkOut * 0.11
+
         val piOverSr = Math.PI / sampleRate
-        val fHiss = 2.0 * (1200.0 * piOverSr)
-        val dampHiss = 1.0
-        val hp = normalizedPink - hissLpSvf1 - dampHiss * hissLpSvf2
-        hissLpSvf2 += fHiss * hp
-        hissLpSvf1 += fHiss * hissLpSvf2
-        val backgroundRain = hissLpSvf1 * 0.5
 
-        // 3. Generate Rain Drops
-        // Left channel drops
-        if (Random.nextDouble() > 0.9997) {
-            dropEnvL = 1.0 + Random.nextDouble() * 0.5
-        }
-        // Right channel drops
-        if (Random.nextDouble() > 0.9997) {
-            dropEnvR = 1.0 + Random.nextDouble() * 0.5
-        }
+        // 2. Wind Gust LFO (0.05 Hz)
+        gustLfoPhase += 2.0 * Math.PI * 0.05 / sampleRate
+        if (gustLfoPhase > 2.0 * Math.PI) gustLfoPhase -= 2.0 * Math.PI
+        val gust = sin(gustLfoPhase) * 0.5 + 0.5 // 0.0 to 1.0
+        
+        // 3. Splatter LFOs (chaotic granular texture, ~20 Hz)
+        splatterLfoPhaseL += 2.0 * Math.PI * 20.0 / sampleRate
+        if (splatterLfoPhaseL > 2.0 * Math.PI) splatterLfoPhaseL -= 2.0 * Math.PI
+        val splatterL = sin(splatterLfoPhaseL + wL * 2.0) * 0.5 + 0.5
 
-        // Decay envelope (approx 10-20ms)
-        dropEnvL *= 0.998
-        dropEnvR *= 0.998
+        splatterLfoPhaseR += 2.0 * Math.PI * 22.0 / sampleRate
+        if (splatterLfoPhaseR > 2.0 * Math.PI) splatterLfoPhaseR -= 2.0 * Math.PI
+        val splatterR = sin(splatterLfoPhaseR + wR * 2.0) * 0.5 + 0.5
 
-        val rawDropL = dropEnvL * wL
-        val rawDropR = dropEnvR * wR
+        // 4. Main Rain Body (Dynamic Lowpass on Pink Noise)
+        // Cutoff shifts between 800Hz (distant/calm) and 4500Hz (close/windy)
+        val cutoff = 800.0 + gust * 3700.0
+        val fLp = 2.0 * (cutoff * piOverSr)
+        val damp = 1.2
 
-        // Bandpass filter for the drops to sound like hitting surfaces (~2500Hz)
-        val fDrop = 2.0 * (2500.0 * piOverSr)
-        val dampDrop = 1.5 // moderate damping
+        val hpL = pink - lp1L - damp * lp2L
+        lp2L += fLp * hpL
+        lp1L += fLp * lp2L
+        val bodyL = lp1L
 
-        val hpDropL = rawDropL - dropBp1L - dampDrop * dropBp2L
-        dropBp2L += fDrop * hpDropL
-        dropBp1L += fDrop * dropBp2L
-        val filteredDropL = dropBp2L * 2.0 // Boost drop volume
+        val hpR = pink - lp1R - damp * lp2R
+        lp2R += fLp * hpR
+        lp1R += fLp * lp2R
+        val bodyR = lp1R
 
-        val hpDropR = rawDropR - dropBp1R - dampDrop * dropBp2R
-        dropBp2R += fDrop * hpDropR
-        dropBp1R += fDrop * dropBp2R
-        val filteredDropR = dropBp2R * 2.0
+        // 5. Close Splash (White noise heavily modulated by chaotic splatters)
+        // We add some gust influence so splashing is louder during wind
+        val splashIntensity = 0.05 + gust * 0.2
+        val splashL = wL * splatterL * splashIntensity
+        val splashR = wR * splatterR * splashIntensity
 
-        // 4. Combine
-        outL = (backgroundRain + filteredDropL).toFloat().coerceIn(-1.0f, 1.0f)
-        outR = (backgroundRain + filteredDropR).toFloat().coerceIn(-1.0f, 1.0f)
+        // 6. Combine
+        outL = (bodyL * 0.8 + splashL).toFloat().coerceIn(-1.0f, 1.0f)
+        outR = (bodyR * 0.8 + splashR).toFloat().coerceIn(-1.0f, 1.0f)
     }
 }
