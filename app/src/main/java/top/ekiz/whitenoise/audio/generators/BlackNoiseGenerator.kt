@@ -18,12 +18,12 @@ class BlackNoiseGenerator : NoiseGenerator() {
         val wL = whiteL.toDouble()
         val wR = whiteR.toDouble()
 
-        lastBrownOutL = (lastBrownOutL + (0.02 * wL)) / 1.02
-        lastBlackOutL = (lastBlackOutL + (0.01 * lastBrownOutL)) / 1.01
+        lastBrownOutL = lastBrownOutL * 0.98039 + wL * 0.01961
+        lastBlackOutL = lastBlackOutL * 0.9901 + lastBrownOutL * 0.0099
         outL = (lastBlackOutL * 10.0).toFloat()
         
-        lastBrownOutR = (lastBrownOutR + (0.02 * wR)) / 1.02
-        lastBlackOutR = (lastBlackOutR + (0.01 * lastBrownOutR)) / 1.01
+        lastBrownOutR = lastBrownOutR * 0.98039 + wR * 0.01961
+        lastBlackOutR = lastBlackOutR * 0.9901 + lastBrownOutR * 0.0099
         outR = (lastBlackOutR * 10.0).toFloat()
     }
 }

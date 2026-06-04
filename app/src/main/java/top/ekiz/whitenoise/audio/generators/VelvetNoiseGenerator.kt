@@ -11,6 +11,20 @@ class VelvetNoiseGenerator : NoiseGenerator() {
     private var velvetPulseR = 0.0
     private var velvetLpfR = 0.0
 
+    private var baseGrid = 15
+    private var varianceGrid = 15.0
+
+    init {
+        updateSampleRate(44100.0)
+    }
+
+    override fun updateSampleRate(sr: Double) {
+        super.updateSampleRate(sr)
+        // Base grid size is ~0.34ms (15 samples @ 44.1kHz)
+        baseGrid = 1.coerceAtLeast((0.00034 * sr).toInt())
+        varianceGrid = 0.00034 * sr
+    }
+
     override fun reset() {
         velvetCounterL = 0; velvetPulseL = 0.0; velvetLpfL = 0.0
         velvetCounterR = 0; velvetPulseR = 0.0; velvetLpfR = 0.0
@@ -23,23 +37,23 @@ class VelvetNoiseGenerator : NoiseGenerator() {
         velvetCounterL++
         if (velvetCounterL >= velvetGridL) {
             velvetCounterL = 0
-            velvetGridL = 15 + ((wL + 1.0) * 0.5 * 15.0).toInt()
+            velvetGridL = baseGrid + ((wL + 1.0) * 0.5 * varianceGrid).toInt()
             velvetPulseL = if (wL > 0) 1.0 else -1.0
         } else {
             velvetPulseL = 0.0
         }
-        velvetLpfL = (velvetLpfL + (0.05 * velvetPulseL)) / 1.05
+        velvetLpfL = velvetLpfL * 0.95238 + velvetPulseL * 0.04762
         outL = (velvetLpfL * 2.5).toFloat()
         
         velvetCounterR++
         if (velvetCounterR >= velvetGridR) {
             velvetCounterR = 0
-            velvetGridR = 15 + ((wR + 1.0) * 0.5 * 15.0).toInt()
+            velvetGridR = baseGrid + ((wR + 1.0) * 0.5 * varianceGrid).toInt()
             velvetPulseR = if (wR > 0) 1.0 else -1.0
         } else {
             velvetPulseR = 0.0
         }
-        velvetLpfR = (velvetLpfR + (0.05 * velvetPulseR)) / 1.05
+        velvetLpfR = velvetLpfR * 0.95238 + velvetPulseR * 0.04762
         outR = (velvetLpfR * 2.5).toFloat()
     }
 }

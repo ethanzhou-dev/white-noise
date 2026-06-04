@@ -28,8 +28,8 @@ class AirplaneCabinGenerator : NoiseGenerator() {
         val wL = whiteL.toDouble()
         val wR = whiteR.toDouble()
 
-        lastDeepBrownOutL = (lastDeepBrownOutL + (0.01 * wL)) / 1.01
-        lastDeepBrownOutR = (lastDeepBrownOutR + (0.01 * wR)) / 1.01
+        lastDeepBrownOutL = lastDeepBrownOutL * 0.9901 + wL * 0.0099
+        lastDeepBrownOutR = lastDeepBrownOutR * 0.9901 + wR * 0.0099
         
         cabinPhase += phaseInc
         if (cabinPhase > 2.0 * PI) cabinPhase -= 2.0 * PI
