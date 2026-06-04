@@ -14,6 +14,8 @@ import androidx.compose.material.icons.filled.Headset
 import androidx.compose.material.icons.filled.Waves
 import androidx.compose.material.icons.filled.Grain
 import androidx.compose.material.icons.filled.Lens
+import androidx.compose.material.icons.filled.GraphicEq
+import androidx.compose.material.icons.filled.Spa
 import androidx.compose.ui.graphics.Color
 import androidx.compose.material3.MaterialTheme
 import top.ekiz.whitenoise.domain.NoiseType
@@ -49,6 +51,8 @@ fun SoundsScreen(
                 NoiseType.HEARTBEAT -> Icons.Filled.Favorite
                 NoiseType.AIRPLANE_CABIN -> Icons.Filled.Flight
                 NoiseType.VELVET -> Icons.Filled.Grain
+                NoiseType.ISOCHRONIC_TONES -> Icons.Filled.GraphicEq
+                NoiseType.SOLFEGGIO_FREQUENCIES -> Icons.Filled.Spa
                 NoiseType.WHITE, NoiseType.PINK, NoiseType.BROWN, NoiseType.DEEP_BROWN, 
                 NoiseType.BLUE, NoiseType.VIOLET, NoiseType.GREY, NoiseType.GREEN, NoiseType.BLACK -> Icons.Filled.Lens
                 else -> Icons.Filled.Headset
