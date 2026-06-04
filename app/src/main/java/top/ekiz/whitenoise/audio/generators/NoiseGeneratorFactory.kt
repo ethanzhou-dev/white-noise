@@ -1,6 +1,6 @@
 package top.ekiz.whitenoise.audio.generators
 
-import top.ekiz.whitenoise.NoiseType
+import top.ekiz.whitenoise.domain.NoiseType
 
 object NoiseGeneratorFactory {
     fun create(type: NoiseType): NoiseGenerator {

@@ -12,9 +12,9 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
-import top.ekiz.whitenoise.NoiseType
-import top.ekiz.whitenoise.SettingsDataStore
-import top.ekiz.whitenoise.TimerManager
+import top.ekiz.whitenoise.domain.NoiseType
+import top.ekiz.whitenoise.data.SettingsDataStore
+import top.ekiz.whitenoise.domain.TimerManager
 import javax.inject.Inject
 
 data class NoiseUiState(

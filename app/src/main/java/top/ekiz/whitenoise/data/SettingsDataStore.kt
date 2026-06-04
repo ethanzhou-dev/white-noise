@@ -1,4 +1,6 @@
-package top.ekiz.whitenoise
+package top.ekiz.whitenoise.data
+
+import top.ekiz.whitenoise.domain.NoiseType
 
 import android.content.Context
 import androidx.datastore.core.DataStore

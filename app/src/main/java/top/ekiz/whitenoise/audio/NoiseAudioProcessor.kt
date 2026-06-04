@@ -2,7 +2,7 @@ package top.ekiz.whitenoise.audio
 
 import androidx.media3.common.audio.AudioProcessor
 import androidx.media3.common.audio.BaseAudioProcessor
-import top.ekiz.whitenoise.NoiseType
+import top.ekiz.whitenoise.domain.NoiseType
 import top.ekiz.whitenoise.audio.generators.NoiseGenerator
 import top.ekiz.whitenoise.audio.generators.NoiseGeneratorFactory
 import java.nio.ByteBuffer

@@ -16,7 +16,7 @@ import androidx.compose.material.icons.filled.Grain
 import androidx.compose.material.icons.filled.Lens
 import androidx.compose.ui.graphics.Color
 import androidx.compose.material3.MaterialTheme
-import top.ekiz.whitenoise.NoiseType
+import top.ekiz.whitenoise.domain.NoiseType
 import top.ekiz.whitenoise.ui.components.NoiseCard
 import top.ekiz.whitenoise.ui.theme.spacing
 

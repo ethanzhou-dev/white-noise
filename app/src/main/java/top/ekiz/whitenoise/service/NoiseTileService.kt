@@ -1,4 +1,6 @@
-package top.ekiz.whitenoise
+package top.ekiz.whitenoise.service
+
+import top.ekiz.whitenoise.service.NoiseService
 
 import android.content.ComponentName
 import android.os.Bundle

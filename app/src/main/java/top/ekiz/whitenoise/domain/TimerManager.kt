@@ -1,4 +1,6 @@
-package top.ekiz.whitenoise
+package top.ekiz.whitenoise.domain
+
+import top.ekiz.whitenoise.data.SettingsDataStore
 
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers

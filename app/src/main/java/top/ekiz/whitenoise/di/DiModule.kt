@@ -6,7 +6,7 @@ import dagger.Provides
 import dagger.hilt.InstallIn
 import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
-import top.ekiz.whitenoise.SettingsDataStore
+import top.ekiz.whitenoise.data.SettingsDataStore
 import javax.inject.Singleton
 
 @Module

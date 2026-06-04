@@ -1,4 +1,4 @@
-package top.ekiz.whitenoise
+package top.ekiz.whitenoise.domain
 
 enum class NoiseType {
     WHITE, PINK, BROWN, DEEP_BROWN, BLUE, VIOLET, GREY, GREEN, BLACK,
