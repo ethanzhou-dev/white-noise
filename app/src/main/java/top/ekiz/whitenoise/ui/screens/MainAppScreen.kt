@@ -72,7 +72,9 @@ fun MainAppScreen(uiState: NoiseUiState, viewModel: NoiseViewModel) {
         Pair(NoiseType.WOMB_SOUNDS, "子宫环境"),
         Pair(NoiseType.WIND, "风声"),
         Pair(NoiseType.AIRPLANE_CABIN, "飞机机舱"),
-        Pair(NoiseType.HEARTBEAT, "心跳声")
+        Pair(NoiseType.HEARTBEAT, "心跳声"),
+        Pair(NoiseType.RAIN, "雨声"),
+        Pair(NoiseType.CAMPFIRE, "营火声")
     )
 
     Scaffold(

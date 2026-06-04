@@ -17,6 +17,8 @@ import androidx.compose.material.icons.filled.Lens
 import androidx.compose.material.icons.filled.GraphicEq
 import androidx.compose.material.icons.filled.Spa
 import androidx.compose.material.icons.filled.ChildCare
+import androidx.compose.material.icons.filled.WaterDrop
+import androidx.compose.material.icons.filled.LocalFireDepartment
 import androidx.compose.ui.graphics.Color
 import androidx.compose.material3.MaterialTheme
 import top.ekiz.whitenoise.domain.NoiseType
@@ -55,6 +57,8 @@ fun SoundsScreen(
                 NoiseType.WOMB_SOUNDS -> Icons.Filled.ChildCare
                 NoiseType.ISOCHRONIC_TONES -> Icons.Filled.GraphicEq
                 NoiseType.SOLFEGGIO_FREQUENCIES -> Icons.Filled.Spa
+                NoiseType.RAIN -> Icons.Filled.WaterDrop
+                NoiseType.CAMPFIRE -> Icons.Filled.LocalFireDepartment
                 NoiseType.WHITE, NoiseType.PINK, NoiseType.BROWN, NoiseType.DEEP_BROWN, 
                 NoiseType.BLUE, NoiseType.VIOLET, NoiseType.GREY, NoiseType.GREEN, NoiseType.BLACK -> Icons.Filled.Lens
                 else -> Icons.Filled.Headset

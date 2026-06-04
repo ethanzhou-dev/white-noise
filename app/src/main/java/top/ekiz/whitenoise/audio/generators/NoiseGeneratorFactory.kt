@@ -23,6 +23,8 @@ object NoiseGeneratorFactory {
             NoiseType.ISOCHRONIC_TONES -> IsochronicTonesGenerator()
             NoiseType.SOLFEGGIO_FREQUENCIES -> SolfeggioFrequenciesGenerator()
             NoiseType.WOMB_SOUNDS -> WombSoundsGenerator()
+            NoiseType.RAIN -> RainGenerator()
+            NoiseType.CAMPFIRE -> CampfireGenerator()
         }
     }
 }
