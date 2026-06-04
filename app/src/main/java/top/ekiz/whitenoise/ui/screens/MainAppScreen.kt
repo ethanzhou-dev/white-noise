@@ -67,6 +67,8 @@ fun MainAppScreen(uiState: NoiseUiState, viewModel: NoiseViewModel) {
         Pair(NoiseType.VELVET, "天鹅绒噪音"),
         Pair(NoiseType.OCEAN_WAVES, "海浪声"),
         Pair(NoiseType.BINAURAL_BEATS, "双耳节拍"),
+        Pair(NoiseType.ISOCHRONIC_TONES, "等时音"),
+        Pair(NoiseType.SOLFEGGIO_FREQUENCIES, "冥想频率"),
         Pair(NoiseType.WIND, "风声"),
         Pair(NoiseType.AIRPLANE_CABIN, "飞机机舱"),
         Pair(NoiseType.HEARTBEAT, "心跳声")

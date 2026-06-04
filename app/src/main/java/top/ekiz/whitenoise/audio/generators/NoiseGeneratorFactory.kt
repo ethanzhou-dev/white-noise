@@ -20,6 +20,8 @@ object NoiseGeneratorFactory {
             NoiseType.WIND -> WindGenerator()
             NoiseType.AIRPLANE_CABIN -> AirplaneCabinGenerator()
             NoiseType.HEARTBEAT -> HeartbeatGenerator()
+            NoiseType.ISOCHRONIC_TONES -> IsochronicTonesGenerator()
+            NoiseType.SOLFEGGIO_FREQUENCIES -> SolfeggioFrequenciesGenerator()
         }
     }
 }
