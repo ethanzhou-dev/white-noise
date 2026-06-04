@@ -85,7 +85,7 @@ class RainGenerator : NoiseGenerator() {
 
         // 4. Main Rain Body (Dynamic Lowpass on Pink Noise)
         // Cutoff shifts between 800Hz (distant/calm) and 4500Hz (close/windy)
-        val cutoff = 800.0 + gust * 3700.0
+        val cutoff = (800.0 + gust * 3700.0).coerceAtMost(sampleRate * 0.45)
         val fLp = 2.0 * cutoff * piOverSr // Linear approximation is fast and sufficient here
         
         val hpL = pink - lp1L - 1.2 * lp2L
