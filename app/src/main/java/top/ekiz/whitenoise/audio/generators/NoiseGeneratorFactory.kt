@@ -22,6 +22,7 @@ object NoiseGeneratorFactory {
             NoiseType.HEARTBEAT -> HeartbeatGenerator()
             NoiseType.ISOCHRONIC_TONES -> IsochronicTonesGenerator()
             NoiseType.SOLFEGGIO_FREQUENCIES -> SolfeggioFrequenciesGenerator()
+            NoiseType.WOMB_SOUNDS -> WombSoundsGenerator()
         }
     }
 }
