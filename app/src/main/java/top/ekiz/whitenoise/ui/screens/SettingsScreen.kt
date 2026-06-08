@@ -64,7 +64,7 @@ fun SettingsScreen(
         
         HorizontalDivider(modifier = Modifier.padding(vertical = MaterialTheme.spacing.medium))
 
-        // 定时关闭模块
+        
         Text(
             text = "定时关闭",
             style = MaterialTheme.typography.labelLarge,

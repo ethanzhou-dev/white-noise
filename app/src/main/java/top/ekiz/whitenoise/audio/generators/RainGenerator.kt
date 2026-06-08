@@ -3,22 +3,22 @@ package top.ekiz.whitenoise.audio.generators
 import kotlin.math.PI
 
 class RainGenerator : NoiseGenerator() {
-    // Stereo Pink Noise State
+    
     private var pinkB0L = 0.0; private var pinkB1L = 0.0; private var pinkB2L = 0.0
     private var pinkB3L = 0.0; private var pinkB4L = 0.0; private var pinkB5L = 0.0; private var pinkB6L = 0.0
 
     private var pinkB0R = 0.0; private var pinkB1R = 0.0; private var pinkB2R = 0.0
     private var pinkB3R = 0.0; private var pinkB4R = 0.0; private var pinkB5R = 0.0; private var pinkB6R = 0.0
 
-    // Lowpass filter state (Rumble)
+    
     private var lp1L = 0.0; private var lp2L = 0.0
     private var lp1R = 0.0; private var lp2R = 0.0
     
-    // Highpass filter state (Sizzle)
+    
     private var hp1L = 0.0; private var hp2L = 0.0
     private var hp1R = 0.0; private var hp2R = 0.0
 
-    // Modulators
+    
     private var gustLfoPhase = 0.0
     private var piOverSr = 0.0
     private var gustLfoInc = 0.0
@@ -30,7 +30,7 @@ class RainGenerator : NoiseGenerator() {
     override fun updateSampleRate(sr: Double) {
         super.updateSampleRate(sr)
         piOverSr = PI / sr
-        // 0.02 Hz means 1 cycle every 50 seconds. Very slow, calming wind.
+        
         gustLfoInc = 0.02 / sr 
     }
 
@@ -44,7 +44,7 @@ class RainGenerator : NoiseGenerator() {
         gustLfoPhase = 0.0
     }
 
-    // Gentle sine-like LFO
+    
     private fun smoothWave(phase: Double): Double {
         val tri = if (phase < 0.5) phase * 2.0 else 2.0 - phase * 2.0
         return tri * tri * (3.0 - 2.0 * tri)
@@ -54,7 +54,7 @@ class RainGenerator : NoiseGenerator() {
         val wL = whiteL.toDouble()
         val wR = whiteR.toDouble()
         
-        // 1. Stereo Pink Noise Generation (Paul Kellet's method)
+        
         pinkB0L = 0.99886 * pinkB0L + wL * 0.0555179
         pinkB1L = 0.99332 * pinkB1L + wL * 0.0750759
         pinkB2L = 0.96900 * pinkB2L + wL * 0.1538520
@@ -75,13 +75,13 @@ class RainGenerator : NoiseGenerator() {
         pinkB6R = wR * 0.115926
         val pinkR = pinkOutR * 0.11
 
-        // 2. Slow Wind Gust LFO
+        
         gustLfoPhase += gustLfoInc
         if (gustLfoPhase >= 1.0) gustLfoPhase -= 1.0
-        val gust = smoothWave(gustLfoPhase) // 0.0 to 1.0
+        val gust = smoothWave(gustLfoPhase) 
         
-        // 3. Lowpass Filter for Distant Rain/Rumble
-        // Cutoff gently moves between 800 Hz and 1300 Hz
+        
+        
         val lpCutoff = 800.0 + gust * 500.0
         val fLp = 2.0 * lpCutoff * piOverSr
         
@@ -95,8 +95,8 @@ class RainGenerator : NoiseGenerator() {
         lp1R += fLp * lp2R
         val rumbleR = lp1R
 
-        // 4. Highpass Filter for Close Rain/Sizzle
-        // Cutoff gently moves, dropping slightly when wind picks up
+        
+        
         val hpCutoff = 2500.0 - gust * 400.0
         val fHp = 2.0 * hpCutoff * piOverSr
         
@@ -110,12 +110,12 @@ class RainGenerator : NoiseGenerator() {
         hp1R += fHp * hp2R
         val sizzleR = hpR_hstate
         
-        // 5. Combine and mix
-        // The rumble is the base. Sizzle adds presence.
+        
+        
         val outVolumeL = rumbleL * 0.6 + sizzleL * 0.15
         val outVolumeR = rumbleR * 0.6 + sizzleR * 0.15
         
-        // Add a gentle volume swell with the gust
+        
         val swell = 0.85 + gust * 0.15
 
         outL = (outVolumeL * swell).toFloat().coerceIn(-1.0f, 1.0f)

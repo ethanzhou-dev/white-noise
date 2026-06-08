@@ -11,9 +11,6 @@ abstract class NoiseGenerator {
     
     abstract fun reset()
     
-    /**
-     * @param whiteL the input random white noise for the left channel (-1.0 to 1.0)
-     * @param whiteR the input random white noise for the right channel (-1.0 to 1.0)
-     */
+    
     abstract fun process(whiteL: Float, whiteR: Float)
 }

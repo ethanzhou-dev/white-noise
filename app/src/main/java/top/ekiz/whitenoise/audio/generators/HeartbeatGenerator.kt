@@ -24,7 +24,7 @@ class HeartbeatGenerator : NoiseGenerator() {
         heartTonePhase = 0.0
     }
 
-    // Fast 0 to 1 smooth wave mimicking sin(x*PI) where x in [0, 1]
+    
     private fun fastEnv(x: Double): Double {
         return 4.0 * x * (1.0 - x)
     }
@@ -35,11 +35,11 @@ class HeartbeatGenerator : NoiseGenerator() {
         
         var env = 0.0
         var freq = 50.0
-        if (heartPhase < 0.15) { // Lub (150ms)
+        if (heartPhase < 0.15) { 
             val p = heartPhase / 0.15
             env = fastEnv(p)
             freq = 60.0 - p * 20.0
-        } else if (heartPhase > 0.3 && heartPhase < 0.4) { // Dub (100ms)
+        } else if (heartPhase > 0.3 && heartPhase < 0.4) { 
             val p = (heartPhase - 0.3) / 0.1
             env = fastEnv(p) * 0.8
             freq = 55.0 - p * 15.0

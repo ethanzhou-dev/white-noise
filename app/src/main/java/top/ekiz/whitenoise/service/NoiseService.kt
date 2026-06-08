@@ -58,8 +58,26 @@ class NoiseService : MediaSessionService() {
             val hasExternalDevice = addedDevices?.any { it.isExternalDevice() } == true
             if (hasExternalDevice && isPausedByDeviceDisconnect) {
                 isPausedByDeviceDisconnect = false
-                // Play with fade in
-                resumePlaybackWithFade()
+                
+                
+                fadeJob?.cancel()
+                fadeJob = serviceScope.launch {
+                    
+                    delay(1000L)
+                    
+                    
+                    
+                    val currentDevices = audioManager.getDevices(AudioManager.GET_DEVICES_OUTPUTS)
+                    val stillConnected = currentDevices.any { it.isExternalDevice() }
+                    
+                    if (stillConnected) {
+                        
+                        resumePlaybackWithFade()
+                    } else {
+                        
+                        isPausedByDeviceDisconnect = true
+                    }
+                }
             }
         }
     }
@@ -98,7 +116,7 @@ class NoiseService : MediaSessionService() {
                     .setContentType(C.AUDIO_CONTENT_TYPE_MUSIC)
                     .setUsage(C.USAGE_MEDIA)
                     .build(),
-                false // handleAudioFocus = false (智能混音)
+                false 
             )
             .setHandleAudioBecomingNoisy(true)
             .build()
@@ -107,6 +125,8 @@ class NoiseService : MediaSessionService() {
             override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) {
                 if (!playWhenReady && reason == Player.PLAY_WHEN_READY_CHANGE_REASON_AUDIO_BECOMING_NOISY) {
                     isPausedByDeviceDisconnect = true
+                    
+                    fadeJob?.cancel()
                 } else if (playWhenReady && reason == Player.PLAY_WHEN_READY_CHANGE_REASON_USER_REQUEST) {
                     isPausedByDeviceDisconnect = false
                 }
@@ -155,14 +175,14 @@ class NoiseService : MediaSessionService() {
             .setCallback(sessionCallback)
             .build()
 
-        // 365 days of silence in microseconds, practically infinite.
-        // Some versions of SilenceMediaSource don't like C.TIME_UNSET, so we use a huge duration.
+        
+        
         val durationUs = 365L * 24 * 60 * 60 * 1000 * 1000
         val silenceSource = SilenceMediaSource(durationUs)
 
         serviceScope.launch {
-            // Wait for initial values from DataStore BEFORE preparing the player
-            // This prevents ExoPlayer from pre-buffering the default WHITE noise
+            
+            
             val initialVolume = settingsDataStore.volumeFlow.first()
             val initialNoiseType = settingsDataStore.noiseTypeFlow.first()
             val initialBalance = settingsDataStore.balanceFlow.first()
@@ -173,7 +193,7 @@ class NoiseService : MediaSessionService() {
             noiseProcessor.balance = initialBalance
             noiseProcessor.isSpatialAudioEnabled = initialSpatial
 
-            // Now that the processor is correctly configured, prepare the player
+            
             player.setMediaSource(silenceSource)
             player.prepare()
 
@@ -203,7 +223,7 @@ class NoiseService : MediaSessionService() {
                 } 
             }
             
-            // Listen to Timer events from TimerManager (Single Source of Truth)
+            
             launch {
                 timerManager.timerEvents.collect { event ->
                     when (event) {
@@ -238,8 +258,8 @@ class NoiseService : MediaSessionService() {
     }
 
     private fun flushPlayerBuffer() {
-        // ExoPlayer ignores seekTo if the target position equals the current position.
-        // We toggle between 1ms and 0ms to guarantee a pipeline flush for audio settings / fade.
+        
+        
         val targetPos = if (player.currentPosition == 0L) 1L else 0L
         player.seekTo(targetPos)
     }
@@ -294,7 +314,7 @@ class NoiseService : MediaSessionService() {
             }
             player.play()
             isPausedByCall = false
-            // Quick hardware volume ramp (200ms) to suppress any HAL DMA buffer leaks
+            
             animatePlayerVolume(0f, 1f, 200L)
         }
     }

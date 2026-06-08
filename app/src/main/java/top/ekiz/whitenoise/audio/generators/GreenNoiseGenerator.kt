@@ -11,9 +11,9 @@ class GreenNoiseGenerator : NoiseGenerator() {
 
     override fun updateSampleRate(sr: Double) {
         super.updateSampleRate(sr)
-        // Green (Butterworth Bandpass, Fc=500Hz, Q=0.5)
+        
         val w0G = 2.0 * Math.PI * 500.0 / sr
-        val alphaG = Math.sin(w0G) / 1.0 // Q=0.5 -> 2.0 * Q = 1.0
+        val alphaG = Math.sin(w0G) / 1.0 
         val a0G = 1.0 + alphaG
         greenB0 = alphaG / a0G
         greenB2 = -alphaG / a0G
@@ -33,7 +33,7 @@ class GreenNoiseGenerator : NoiseGenerator() {
         val outY_L = greenB0 * wL + greenB2 * greenX2L - greenA1 * greenY1L - greenA2 * greenY2L
         greenX2L = greenX1L; greenX1L = wL
         greenY2L = greenY1L; greenY1L = outY_L
-        outL = (outY_L * 4.0).toFloat() // Gain compensation
+        outL = (outY_L * 4.0).toFloat() 
         
         val outY_R = greenB0 * wR + greenB2 * greenX2R - greenA1 * greenY1R - greenA2 * greenY2R
         greenX2R = greenX1R; greenX1R = wR

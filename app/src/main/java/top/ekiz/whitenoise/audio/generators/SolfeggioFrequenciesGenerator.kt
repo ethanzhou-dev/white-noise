@@ -25,7 +25,7 @@ class SolfeggioFrequenciesGenerator : NoiseGenerator() {
         phase += phaseInc
         if (phase > 2.0 * PI) phase -= 2.0 * PI
         
-        // Pure sine wave at 528 Hz, amplitude 0.5
+        
         val output = (sin(phase) * 0.5).toFloat()
         
         outL = output

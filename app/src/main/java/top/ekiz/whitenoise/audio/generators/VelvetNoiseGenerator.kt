@@ -20,7 +20,7 @@ class VelvetNoiseGenerator : NoiseGenerator() {
 
     override fun updateSampleRate(sr: Double) {
         super.updateSampleRate(sr)
-        // Base grid size is ~0.34ms (15 samples @ 44.1kHz)
+        
         baseGrid = 1.coerceAtLeast((0.00034 * sr).toInt())
         varianceGrid = 0.00034 * sr
     }

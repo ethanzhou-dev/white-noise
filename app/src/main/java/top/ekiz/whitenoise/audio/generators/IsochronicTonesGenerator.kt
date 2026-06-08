@@ -15,9 +15,9 @@ class IsochronicTonesGenerator : NoiseGenerator() {
 
     override fun updateSampleRate(sr: Double) {
         super.updateSampleRate(sr)
-        // Isochronic tones: Carrier frequency pulsed on and off at a specific rate
-        // E.g., 200 Hz carrier, 4 Hz pulse (Theta waves)
-        modInc = 4.0 / sr // phase runs 0 to 1
+        
+        
+        modInc = 4.0 / sr 
         carrierInc = 2.0 * PI * 200.0 / sr
     }
 
@@ -26,7 +26,7 @@ class IsochronicTonesGenerator : NoiseGenerator() {
         carrierPhase = 0.0
     }
 
-    // Fast 0 to 1 smooth wave mimicking (sin(x)+1)/2
+    
     private fun smoothWave(phase: Double): Double {
         val tri = if (phase < 0.5) phase * 2.0 else 2.0 - phase * 2.0
         return tri * tri * (3.0 - 2.0 * tri)

@@ -24,7 +24,7 @@ import top.ekiz.whitenoise.ui.NoiseViewModel
 fun MainAppScreen(uiState: NoiseUiState, viewModel: NoiseViewModel) {
     val context = LocalContext.current
     
-    // Permission handling for notifications (Android 13+)
+    
     var hasNotificationPermission by remember {
         mutableStateOf(
             context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED

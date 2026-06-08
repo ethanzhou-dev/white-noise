@@ -39,7 +39,7 @@ class NoiseViewModel @Inject constructor(
 
     private var mediaController: MediaController? = null
 
-    // Local mutable state for fast-updating UI fields (like current playback state)
+    
     private val _isPlaying = MutableStateFlow(false)
 
     private val settingsFlow = combine(
@@ -98,7 +98,7 @@ class NoiseViewModel @Inject constructor(
     fun togglePlayPause() {
         val controller = mediaController ?: return
         
-        // Optimistic update: immediately flip the state for instant UI response
+        
         val wasPlaying = _isPlaying.value
         _isPlaying.value = !wasPlaying
         
@@ -125,7 +125,7 @@ class NoiseViewModel @Inject constructor(
         viewModelScope.launch {
             dataStore.saveSleepTimer(minutes)
             if (timerManager.isTimerRunning.value) {
-                // Auto-restart timer with new value if running
+                
                 val totalMillis = minutes * 60000L
                 if (totalMillis > 0) {
                     timerManager.startTimer(totalMillis, isResume = false)

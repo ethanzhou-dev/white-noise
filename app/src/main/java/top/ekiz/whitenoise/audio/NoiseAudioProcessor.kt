@@ -12,8 +12,8 @@ import kotlin.math.min
 @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
 class NoiseAudioProcessor : BaseAudioProcessor() {
 
-    @Volatile var volume: Float = 0.5f // 0.0 to 1.0
-    @Volatile var balance: Float = 0f // -1.0 to 1.0
+    @Volatile var volume: Float = 0.5f 
+    @Volatile var balance: Float = 0f 
     @Volatile var noiseType: NoiseType = NoiseType.WHITE
     @Volatile var isSpatialAudioEnabled: Boolean = false
     @Volatile var forceImmediateSwitch: Boolean = false
@@ -40,11 +40,11 @@ class NoiseAudioProcessor : BaseAudioProcessor() {
     }
     
     private var crossfadeProgress = 1f
-    private var crossfadeStep = 1f / (44100f * 1.5f) // 1.5s crossfade
+    private var crossfadeStep = 1f / (44100f * 1.5f) 
 
-    // Spatial Audio (Binaural) state
+    
     private var lfoPhase: Double = 0.0
-    private var lfoStep: Double = 2.0 * Math.PI * 0.05 / 44100.0 // 0.05 Hz
+    private var lfoStep: Double = 2.0 * Math.PI * 0.05 / 44100.0 
     private var headShadowL = 0f
     private var headShadowR = 0f
 
@@ -79,7 +79,7 @@ class NoiseAudioProcessor : BaseAudioProcessor() {
         } else {
             44100
         }
-        // One sample per channel, but we process per frame (1 loop iteration = 1 frame)
+        
         val totalFrames = (durationMs / 1000f) * sr
         pcmFadeStep = 1f / totalFrames
     }
@@ -88,7 +88,7 @@ class NoiseAudioProcessor : BaseAudioProcessor() {
         val remaining = inputBuffer.remaining()
         if (remaining == 0) return
 
-        // Allocate or reuse output buffer
+        
         val buffer = replaceOutputBuffer(remaining)
         
         val currentVolume = volume
@@ -97,9 +97,9 @@ class NoiseAudioProcessor : BaseAudioProcessor() {
         val rightVol = 1f + min(0f, currentBalance)
         
         val isStereo = inputAudioFormat.channelCount == 2
-        val numShorts = remaining / 2 // 16-bit PCM
+        val numShorts = remaining / 2 
         
-        // Advance input buffer position as we are completely replacing it
+        
         inputBuffer.position(inputBuffer.position() + remaining)
         
         if (currentNoiseType != noiseType) {
@@ -136,7 +136,7 @@ class NoiseAudioProcessor : BaseAudioProcessor() {
             }
             val effectiveVolume = currentVolume * currentFadeMult
 
-            // XorShift64 algorithm for ultra-fast pseudo-random noise
+            
             rngState = rngState xor (rngState shl 13)
             rngState = rngState xor (rngState ushr 7)
             rngState = rngState xor (rngState shl 17)
@@ -172,7 +172,7 @@ class NoiseAudioProcessor : BaseAudioProcessor() {
                     val fadeGen = fadingGenerator
                     if (fadeGen != null) {
                         fadeGen.process(whiteL, whiteR)
-                        // Linear crossfade since both states share the same white noise source (highly correlated)
+                        
                         val fadeInGain = crossfadeProgress
                         val fadeOutGain = 1f - crossfadeProgress
                         
@@ -182,7 +182,7 @@ class NoiseAudioProcessor : BaseAudioProcessor() {
                 }
             }
 
-            // Binaural Spatializer
+            
             if (isSpatialAudioEnabled && isStereo) {
                 lfoPhase += lfoStep
                 if (lfoPhase > Math.PI * 2.0) {

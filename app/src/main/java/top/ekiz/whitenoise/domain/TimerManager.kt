@@ -46,7 +46,7 @@ class TimerManager @Inject constructor(
     private var tickerJob: Job? = null
 
     init {
-        // Restore timer state on startup
+        
         scope.launch {
             val total = settingsDataStore.totalTimerMillisFlow.first()
             if (total > 0L) {
@@ -57,17 +57,17 @@ class TimerManager @Inject constructor(
             if (endTime > 0L) {
                 val remaining = endTime - System.currentTimeMillis()
                 if (remaining > 0) {
-                    // Timer was running and hasn't expired
+                    
                     startTicker(remaining, endTime)
                 } else {
-                    // Timer expired while app was dead
+                    
                     settingsDataStore.saveTimerEndTime(0L)
                     settingsDataStore.saveTimerRemaining(0L)
                     settingsDataStore.saveTotalTimerMillis(0L)
                     _totalTimerMillis.value = 0L
                 }
             } else {
-                // Check if there's a paused timer
+                
                 val remaining = settingsDataStore.timerRemainingFlow.first()
                 if (remaining > 0L) {
                     _activeRemainingMillis.value = remaining
@@ -88,7 +88,7 @@ class TimerManager @Inject constructor(
             }
             val endTime = System.currentTimeMillis() + durationMs
             
-            // Save Intent to DataStore (Persistence)
+            
             settingsDataStore.saveTimerRemaining(0L)
             settingsDataStore.saveTimerEndTime(endTime)
             
@@ -103,7 +103,7 @@ class TimerManager @Inject constructor(
             val remaining = _activeRemainingMillis.value
             _isTimerRunning.value = false
             
-            // Save Intent to DataStore (Persistence)
+            
             settingsDataStore.saveTimerEndTime(0L)
             if (remaining > 0) {
                 settingsDataStore.saveTimerRemaining(remaining)
@@ -121,7 +121,7 @@ class TimerManager @Inject constructor(
             _totalTimerMillis.value = 0L
             _isTimerRunning.value = false
             
-            // Save Intent to DataStore (Persistence)
+            
             settingsDataStore.saveTimerEndTime(0L)
             settingsDataStore.saveTimerRemaining(0L)
             settingsDataStore.saveTotalTimerMillis(0L)
@@ -141,7 +141,7 @@ class TimerManager @Inject constructor(
             while (true) {
                 val remaining = endTime - System.currentTimeMillis()
                 
-                // Trigger fade out at exactly 60 seconds (or immediately if started < 60s)
+                
                 if (remaining <= 60000L && !fadeTriggered) {
                     fadeTriggered = true
                     _timerEvents.tryEmit(TimerEvent.START_FADE_OUT)
@@ -150,7 +150,7 @@ class TimerManager @Inject constructor(
                 if (remaining > 0) {
                     _activeRemainingMillis.value = remaining
                 } else {
-                    // Timer finished
+                    
                     _activeRemainingMillis.value = 0L
                     _totalTimerMillis.value = 0L
                     _isTimerRunning.value = false
