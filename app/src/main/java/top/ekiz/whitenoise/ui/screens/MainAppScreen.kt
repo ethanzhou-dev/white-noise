@@ -4,16 +4,14 @@ import android.Manifest
 import android.content.pm.PackageManager
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.Forest
+import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
-import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import top.ekiz.whitenoise.domain.NoiseType
 import top.ekiz.whitenoise.ui.NoiseUiState
@@ -23,23 +21,24 @@ import top.ekiz.whitenoise.ui.NoiseViewModel
 @Composable
 fun MainAppScreen(uiState: NoiseUiState, viewModel: NoiseViewModel) {
     val context = LocalContext.current
-    
-    
+
     var hasNotificationPermission by remember {
         mutableStateOf(
-            context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
+            context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) ==
+                PackageManager.PERMISSION_GRANTED
         )
     }
 
-    val permissionLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.RequestPermission(),
-        onResult = { isGranted ->
-            hasNotificationPermission = isGranted
-            if (isGranted) {
-                viewModel.togglePlayPause()
+    val permissionLauncher =
+        rememberLauncherForActivityResult(
+            contract = ActivityResultContracts.RequestPermission(),
+            onResult = { isGranted ->
+                hasNotificationPermission = isGranted
+                if (isGranted) {
+                    viewModel.togglePlayPause()
+                }
             }
-        }
-    )
+        )
 
     fun onPlayPauseClicked() {
         if (!hasNotificationPermission) {
@@ -51,45 +50,53 @@ fun MainAppScreen(uiState: NoiseUiState, viewModel: NoiseViewModel) {
 
     var selectedTab by remember { mutableIntStateOf(0) }
 
-    val colorNoises = listOf(
-        Pair(NoiseType.BLACK, "黑噪音"),
-        Pair(NoiseType.DEEP_BROWN, "深棕噪音"),
-        Pair(NoiseType.BROWN, "棕噪音"),
-        Pair(NoiseType.PINK, "粉噪音"),
-        Pair(NoiseType.WHITE, "白噪音"),
-        Pair(NoiseType.BLUE, "蓝噪音"),
-        Pair(NoiseType.VIOLET, "紫噪音"),
-        Pair(NoiseType.GREEN, "绿噪音"),
-        Pair(NoiseType.GREY, "灰噪音")
-    )
+    val colorNoises =
+        listOf(
+            Pair(NoiseType.BLACK, "黑噪音"),
+            Pair(NoiseType.DEEP_BROWN, "深棕噪音"),
+            Pair(NoiseType.BROWN, "棕噪音"),
+            Pair(NoiseType.PINK, "粉噪音"),
+            Pair(NoiseType.WHITE, "白噪音"),
+            Pair(NoiseType.BLUE, "蓝噪音"),
+            Pair(NoiseType.VIOLET, "紫噪音"),
+            Pair(NoiseType.GREEN, "绿噪音"),
+            Pair(NoiseType.GREY, "灰噪音")
+        )
 
-    val otherNoises = listOf(
-        Pair(NoiseType.VELVET, "天鹅绒噪音"),
-        Pair(NoiseType.OCEAN_WAVES, "海浪声"),
-        Pair(NoiseType.BINAURAL_BEATS, "双耳节拍"),
-        Pair(NoiseType.ISOCHRONIC_TONES, "等时音"),
-        Pair(NoiseType.SOLFEGGIO_FREQUENCIES, "冥想频率"),
-        Pair(NoiseType.WOMB_SOUNDS, "子宫环境"),
-        Pair(NoiseType.WIND, "风声"),
-        Pair(NoiseType.AIRPLANE_CABIN, "飞机机舱"),
-        Pair(NoiseType.HEARTBEAT, "心跳声"),
-        Pair(NoiseType.RAIN, "雨声"),
-        Pair(NoiseType.CAMPFIRE, "营火声")
-    )
+    val otherNoises =
+        listOf(
+            Pair(NoiseType.VELVET, "天鹅绒噪音"),
+            Pair(NoiseType.OCEAN_WAVES, "海浪声"),
+            Pair(NoiseType.BINAURAL_BEATS, "双耳节拍"),
+            Pair(NoiseType.ISOCHRONIC_TONES, "等时音"),
+            Pair(NoiseType.SOLFEGGIO_FREQUENCIES, "冥想频率"),
+            Pair(NoiseType.WOMB_SOUNDS, "子宫环境"),
+            Pair(NoiseType.WIND, "风声"),
+            Pair(NoiseType.AIRPLANE_CABIN, "飞机机舱"),
+            Pair(NoiseType.HEARTBEAT, "心跳声"),
+            Pair(NoiseType.RAIN, "雨声"),
+            Pair(NoiseType.CAMPFIRE, "营火声")
+        )
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(when (selectedTab) {
-                    0 -> "颜色噪音"
-                    1 -> "其他声音"
-                    else -> "设置"
-                }) },
+                title = {
+                    Text(
+                        when (selectedTab) {
+                            0 -> "颜色噪音"
+                            1 -> "其他声音"
+                            else -> "设置"
+                        }
+                    )
+                },
                 actions = {
                     if (selectedTab == 0 || selectedTab == 1) {
                         IconButton(onClick = { onPlayPauseClicked() }) {
                             Icon(
-                                imageVector = if (uiState.isPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow,
+                                imageVector =
+                                    if (uiState.isPlaying) Icons.Filled.Pause
+                                    else Icons.Filled.PlayArrow,
                                 contentDescription = if (uiState.isPlaying) "暂停" else "播放"
                             )
                         }

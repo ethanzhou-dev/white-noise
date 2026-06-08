@@ -1,7 +1,5 @@
 package top.ekiz.whitenoise.service
 
-import top.ekiz.whitenoise.service.NoiseService
-
 import android.content.ComponentName
 import android.os.Bundle
 import android.service.quicksettings.Tile
@@ -19,25 +17,29 @@ class NoiseTileService : TileService() {
     private var controllerFuture: ListenableFuture<MediaController>? = null
     private var mediaController: MediaController? = null
 
-    private val playerListener = object : Player.Listener {
-        override fun onIsPlayingChanged(isPlaying: Boolean) {
-            updateTileState(isPlaying)
+    private val playerListener =
+        object : Player.Listener {
+            override fun onIsPlayingChanged(isPlaying: Boolean) {
+                updateTileState(isPlaying)
+            }
         }
-    }
 
     override fun onStartListening() {
         super.onStartListening()
         val sessionToken = SessionToken(this, ComponentName(this, NoiseService::class.java))
         controllerFuture = MediaController.Builder(this, sessionToken).buildAsync()
-        controllerFuture?.addListener({
-            try {
-                mediaController = controllerFuture?.get()
-                mediaController?.addListener(playerListener)
-                updateTileState(mediaController?.isPlaying == true)
-            } catch (e: Exception) {
-                Log.e("NoiseTileService", "Failed to connect to MediaController", e)
-            }
-        }, MoreExecutors.directExecutor())
+        controllerFuture?.addListener(
+            {
+                try {
+                    mediaController = controllerFuture?.get()
+                    mediaController?.addListener(playerListener)
+                    updateTileState(mediaController?.isPlaying == true)
+                } catch (e: Exception) {
+                    Log.e("NoiseTileService", "Failed to connect to MediaController", e)
+                }
+            },
+            MoreExecutors.directExecutor()
+        )
     }
 
     override fun onStopListening() {
@@ -54,25 +56,35 @@ class NoiseTileService : TileService() {
         if (controller != null) {
             togglePlay(controller)
         } else {
-            controllerFuture?.addListener({
-                val futureController = try {
-                    controllerFuture?.get()
-                } catch (e: Exception) {
-                    null
-                }
-                if (futureController != null) {
-                    togglePlay(futureController)
-                }
-            }, MoreExecutors.directExecutor())
+            controllerFuture?.addListener(
+                {
+                    val futureController =
+                        try {
+                            controllerFuture?.get()
+                        } catch (e: Exception) {
+                            null
+                        }
+                    if (futureController != null) {
+                        togglePlay(futureController)
+                    }
+                },
+                MoreExecutors.directExecutor()
+            )
         }
     }
 
     private fun togglePlay(controller: MediaController) {
         val isPlaying = controller.isPlaying
         if (isPlaying) {
-            controller.sendCustomCommand(SessionCommand("PAUSE_WITH_FADE", Bundle.EMPTY), Bundle.EMPTY)
+            controller.sendCustomCommand(
+                SessionCommand("PAUSE_WITH_FADE", Bundle.EMPTY),
+                Bundle.EMPTY
+            )
         } else {
-            controller.sendCustomCommand(SessionCommand("PLAY_WITH_FADE", Bundle.EMPTY), Bundle.EMPTY)
+            controller.sendCustomCommand(
+                SessionCommand("PLAY_WITH_FADE", Bundle.EMPTY),
+                Bundle.EMPTY
+            )
         }
     }
 

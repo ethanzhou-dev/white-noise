@@ -1,7 +1,5 @@
 package top.ekiz.whitenoise.ui
 
-import top.ekiz.whitenoise.service.NoiseService
-
 import android.content.ComponentName
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -20,7 +18,7 @@ import androidx.media3.session.SessionToken
 import com.google.common.util.concurrent.ListenableFuture
 import com.google.common.util.concurrent.MoreExecutors
 import dagger.hilt.android.AndroidEntryPoint
-import top.ekiz.whitenoise.ui.NoiseViewModel
+import top.ekiz.whitenoise.service.NoiseService
 import top.ekiz.whitenoise.ui.screens.MainAppScreen
 import top.ekiz.whitenoise.ui.theme.WhiteNoiseTheme
 
@@ -39,11 +37,13 @@ class MainActivity : ComponentActivity() {
             {
                 mediaController = controllerFuture?.get()
                 viewModel.setMediaController(mediaController)
-                mediaController?.addListener(object : androidx.media3.common.Player.Listener {
-                    override fun onIsPlayingChanged(isPlaying: Boolean) {
-                        viewModel.updatePlaybackState()
+                mediaController?.addListener(
+                    object : androidx.media3.common.Player.Listener {
+                        override fun onIsPlayingChanged(isPlaying: Boolean) {
+                            viewModel.updatePlaybackState()
+                        }
                     }
-                })
+                )
             },
             MoreExecutors.directExecutor()
         )
@@ -57,20 +57,21 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-        
+
         setContent {
             val uiState by viewModel.uiState.collectAsState()
-            
+
             if (uiState.isLoading) {
                 return@setContent
             }
-            
-            val darkTheme = when (uiState.themeMode) {
-                "Dark" -> true
-                "Light" -> false
-                else -> isSystemInDarkTheme()
-            }
-            
+
+            val darkTheme =
+                when (uiState.themeMode) {
+                    "Dark" -> true
+                    "Light" -> false
+                    else -> isSystemInDarkTheme()
+                }
+
             WhiteNoiseTheme(darkTheme = darkTheme) {
                 Surface(
                     modifier = Modifier.fillMaxSize(),

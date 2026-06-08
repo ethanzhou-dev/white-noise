@@ -2,18 +2,18 @@ package top.ekiz.whitenoise.audio
 
 import androidx.media3.common.audio.AudioProcessor
 import androidx.media3.common.audio.BaseAudioProcessor
-import top.ekiz.whitenoise.domain.NoiseType
-import top.ekiz.whitenoise.audio.generators.NoiseGenerator
-import top.ekiz.whitenoise.audio.generators.NoiseGeneratorFactory
 import java.nio.ByteBuffer
 import kotlin.math.max
 import kotlin.math.min
+import top.ekiz.whitenoise.audio.generators.NoiseGenerator
+import top.ekiz.whitenoise.audio.generators.NoiseGeneratorFactory
+import top.ekiz.whitenoise.domain.NoiseType
 
 @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
 class NoiseAudioProcessor : BaseAudioProcessor() {
 
-    @Volatile var volume: Float = 0.5f 
-    @Volatile var balance: Float = 0f 
+    @Volatile var volume: Float = 0.5f
+    @Volatile var balance: Float = 0f
     @Volatile var noiseType: NoiseType = NoiseType.WHITE
     @Volatile var isSpatialAudioEnabled: Boolean = false
     @Volatile var forceImmediateSwitch: Boolean = false
@@ -22,7 +22,7 @@ class NoiseAudioProcessor : BaseAudioProcessor() {
     @Volatile private var pcmFadeStep: Float = 0f
 
     private var currentNoiseType = noiseType
-    
+
     private var currentGenerator: NoiseGenerator = NoiseGeneratorFactory.create(noiseType)
     private var fadingGenerator: NoiseGenerator? = null
 
@@ -32,25 +32,26 @@ class NoiseAudioProcessor : BaseAudioProcessor() {
         fadingGenerator = null
         crossfadeProgress = 1f
         forceImmediateSwitch = false
-        
+
         currentGenerator = NoiseGeneratorFactory.create(type)
         if (inputAudioFormat.sampleRate > 0) {
             currentGenerator.updateSampleRate(inputAudioFormat.sampleRate.toDouble())
         }
     }
-    
-    private var crossfadeProgress = 1f
-    private var crossfadeStep = 1f / (44100f * 1.5f) 
 
-    
+    private var crossfadeProgress = 1f
+    private var crossfadeStep = 1f / (44100f * 1.5f)
+
     private var lfoPhase: Double = 0.0
-    private var lfoStep: Double = 2.0 * Math.PI * 0.05 / 44100.0 
+    private var lfoStep: Double = 2.0 * Math.PI * 0.05 / 44100.0
     private var headShadowL = 0f
     private var headShadowR = 0f
 
     private var rngState: Long = System.nanoTime().let { if (it == 0L) 1L else it }
 
-    override fun onConfigure(inputAudioFormat: AudioProcessor.AudioFormat): AudioProcessor.AudioFormat {
+    override fun onConfigure(
+        inputAudioFormat: AudioProcessor.AudioFormat
+    ): AudioProcessor.AudioFormat {
         val sr = inputAudioFormat.sampleRate
         if (sr > 0) {
             crossfadeStep = 1f / (sr.toFloat() * 1.5f)
@@ -74,12 +75,13 @@ class NoiseAudioProcessor : BaseAudioProcessor() {
             return
         }
         pcmFadeMultiplier = 0f
-        val sr = if (inputAudioFormat.sampleRate != -1) {
-            inputAudioFormat.sampleRate
-        } else {
-            44100
-        }
-        
+        val sr =
+            if (inputAudioFormat.sampleRate != -1) {
+                inputAudioFormat.sampleRate
+            } else {
+                44100
+            }
+
         val totalFrames = (durationMs / 1000f) * sr
         pcmFadeStep = 1f / totalFrames
     }
@@ -88,20 +90,18 @@ class NoiseAudioProcessor : BaseAudioProcessor() {
         val remaining = inputBuffer.remaining()
         if (remaining == 0) return
 
-        
         val buffer = replaceOutputBuffer(remaining)
-        
+
         val currentVolume = volume
         val currentBalance = balance
         val leftVol = 1f - max(0f, currentBalance)
         val rightVol = 1f + min(0f, currentBalance)
-        
+
         val isStereo = inputAudioFormat.channelCount == 2
-        val numShorts = remaining / 2 
-        
-        
+        val numShorts = remaining / 2
+
         inputBuffer.position(inputBuffer.position() + remaining)
-        
+
         if (currentNoiseType != noiseType) {
             if (forceImmediateSwitch) {
                 currentNoiseType = noiseType
@@ -118,14 +118,14 @@ class NoiseAudioProcessor : BaseAudioProcessor() {
                 if (inputAudioFormat.sampleRate > 0) {
                     currentGenerator.updateSampleRate(inputAudioFormat.sampleRate.toDouble())
                 }
-                
+
                 currentNoiseType = noiseType
                 crossfadeProgress = 0f
             }
         } else {
             forceImmediateSwitch = false
         }
-        
+
         val fadeStep = pcmFadeStep
         var currentFadeMult = pcmFadeMultiplier
 
@@ -136,7 +136,6 @@ class NoiseAudioProcessor : BaseAudioProcessor() {
             }
             val effectiveVolume = currentVolume * currentFadeMult
 
-            
             rngState = rngState xor (rngState shl 13)
             rngState = rngState xor (rngState ushr 7)
             rngState = rngState xor (rngState shl 17)
@@ -147,18 +146,19 @@ class NoiseAudioProcessor : BaseAudioProcessor() {
             rngState = rngState xor (rngState shl 17)
             val sideWhiteL = (rngState ushr 40).toFloat() * 1.1920929E-7f - 1f
 
-            val sideWhiteR = if (isStereo) {
-                rngState = rngState xor (rngState shl 13)
-                rngState = rngState xor (rngState ushr 7)
-                rngState = rngState xor (rngState shl 17)
-                (rngState ushr 40).toFloat() * 1.1920929E-7f - 1f
-            } else {
-                sideWhiteL
-            }
+            val sideWhiteR =
+                if (isStereo) {
+                    rngState = rngState xor (rngState shl 13)
+                    rngState = rngState xor (rngState ushr 7)
+                    rngState = rngState xor (rngState shl 17)
+                    (rngState ushr 40).toFloat() * 1.1920929E-7f - 1f
+                } else {
+                    sideWhiteL
+                }
 
             val whiteL = centerWhite * 0.8f + sideWhiteL * 0.6f
             val whiteR = centerWhite * 0.8f + sideWhiteR * 0.6f
-            
+
             currentGenerator.process(whiteL, whiteR)
             var outputL = currentGenerator.outL
             var outputR = currentGenerator.outR
@@ -172,34 +172,33 @@ class NoiseAudioProcessor : BaseAudioProcessor() {
                     val fadeGen = fadingGenerator
                     if (fadeGen != null) {
                         fadeGen.process(whiteL, whiteR)
-                        
+
                         val fadeInGain = crossfadeProgress
                         val fadeOutGain = 1f - crossfadeProgress
-                        
+
                         outputL = outputL * fadeInGain + fadeGen.outL * fadeOutGain
                         outputR = outputR * fadeInGain + fadeGen.outR * fadeOutGain
                     }
                 }
             }
 
-            
             if (isSpatialAudioEnabled && isStereo) {
                 lfoPhase += lfoStep
                 if (lfoPhase > Math.PI * 2.0) {
                     lfoPhase -= Math.PI * 2.0
                 }
-                
+
                 val lfoVal = kotlin.math.sin(lfoPhase).toFloat()
-                
+
                 val levelL = 1.0f - max(0f, lfoVal * 0.25f)
                 val levelR = 1.0f - max(0f, -lfoVal * 0.25f)
-                
+
                 val lpfCoeffL = 1.0f - max(0f, lfoVal * 0.4f)
                 headShadowL = headShadowL + lpfCoeffL * (outputL - headShadowL)
-                
+
                 val lpfCoeffR = 1.0f - max(0f, -lfoVal * 0.4f)
                 headShadowR = headShadowR + lpfCoeffR * (outputR - headShadowR)
-                
+
                 outputL = headShadowL * levelL
                 outputR = headShadowR * levelR
             }
@@ -214,14 +213,15 @@ class NoiseAudioProcessor : BaseAudioProcessor() {
             i++
 
             if (isStereo) {
-                val sampleR = (outputR * rightVol * Short.MAX_VALUE * effectiveVolume).toInt().toShort()
+                val sampleR =
+                    (outputR * rightVol * Short.MAX_VALUE * effectiveVolume).toInt().toShort()
                 buffer.putShort(sampleR)
                 i++
             }
         }
-        
+
         pcmFadeMultiplier = currentFadeMult
-        
+
         buffer.flip()
     }
 }

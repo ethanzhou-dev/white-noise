@@ -15,7 +15,7 @@ class DeepBrownNoiseGenerator : NoiseGenerator() {
 
         lastDeepBrownOutL = lastDeepBrownOutL * 0.9901 + wL * 0.0099
         outL = (lastDeepBrownOutL * 5.0).toFloat()
-        
+
         lastDeepBrownOutR = lastDeepBrownOutR * 0.9901 + wR * 0.0099
         outR = (lastDeepBrownOutR * 5.0).toFloat()
     }

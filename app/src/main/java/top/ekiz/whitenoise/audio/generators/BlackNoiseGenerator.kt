@@ -3,7 +3,7 @@ package top.ekiz.whitenoise.audio.generators
 class BlackNoiseGenerator : NoiseGenerator() {
     private var lastBrownOutL = 0.0
     private var lastBlackOutL = 0.0
-    
+
     private var lastBrownOutR = 0.0
     private var lastBlackOutR = 0.0
 
@@ -21,7 +21,7 @@ class BlackNoiseGenerator : NoiseGenerator() {
         lastBrownOutL = lastBrownOutL * 0.98039 + wL * 0.01961
         lastBlackOutL = lastBlackOutL * 0.9901 + lastBrownOutL * 0.0099
         outL = (lastBlackOutL * 10.0).toFloat()
-        
+
         lastBrownOutR = lastBrownOutR * 0.98039 + wR * 0.01961
         lastBlackOutR = lastBlackOutR * 0.9901 + lastBrownOutR * 0.0099
         outR = (lastBlackOutR * 10.0).toFloat()

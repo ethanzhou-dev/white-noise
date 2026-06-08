@@ -24,7 +24,6 @@ class HeartbeatGenerator : NoiseGenerator() {
         heartTonePhase = 0.0
     }
 
-    
     private fun fastEnv(x: Double): Double {
         return 4.0 * x * (1.0 - x)
     }
@@ -32,24 +31,24 @@ class HeartbeatGenerator : NoiseGenerator() {
     override fun process(whiteL: Float, whiteR: Float) {
         heartPhase += phaseInc
         if (heartPhase >= 1.0) heartPhase -= 1.0
-        
+
         var env = 0.0
         var freq = 50.0
-        if (heartPhase < 0.15) { 
+        if (heartPhase < 0.15) {
             val p = heartPhase / 0.15
             env = fastEnv(p)
             freq = 60.0 - p * 20.0
-        } else if (heartPhase > 0.3 && heartPhase < 0.4) { 
+        } else if (heartPhase > 0.3 && heartPhase < 0.4) {
             val p = (heartPhase - 0.3) / 0.1
             env = fastEnv(p) * 0.8
             freq = 55.0 - p * 15.0
         }
-        
+
         heartTonePhase += freq * 2.0 * piOverSr
         if (heartTonePhase > 2.0 * PI) heartTonePhase -= 2.0 * PI
-        
+
         val tone = (sin(heartTonePhase) * env * 0.85).toFloat()
-        
+
         outL = tone
         outR = tone
     }

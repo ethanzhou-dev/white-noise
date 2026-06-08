@@ -15,9 +15,8 @@ class IsochronicTonesGenerator : NoiseGenerator() {
 
     override fun updateSampleRate(sr: Double) {
         super.updateSampleRate(sr)
-        
-        
-        modInc = 4.0 / sr 
+
+        modInc = 4.0 / sr
         carrierInc = 2.0 * PI * 200.0 / sr
     }
 
@@ -26,7 +25,6 @@ class IsochronicTonesGenerator : NoiseGenerator() {
         carrierPhase = 0.0
     }
 
-    
     private fun smoothWave(phase: Double): Double {
         val tri = if (phase < 0.5) phase * 2.0 else 2.0 - phase * 2.0
         return tri * tri * (3.0 - 2.0 * tri)
@@ -35,14 +33,14 @@ class IsochronicTonesGenerator : NoiseGenerator() {
     override fun process(whiteL: Float, whiteR: Float) {
         modPhase += modInc
         if (modPhase >= 1.0) modPhase -= 1.0
-        
+
         carrierPhase += carrierInc
         if (carrierPhase > 2.0 * PI) carrierPhase -= 2.0 * PI
-        
+
         val envelope = smoothWave(modPhase)
-        
+
         val output = (sin(carrierPhase) * 0.5 * envelope).toFloat()
-        
+
         outL = output
         outR = output
     }

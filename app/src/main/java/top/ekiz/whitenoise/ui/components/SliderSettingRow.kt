@@ -19,12 +19,7 @@ fun SliderSettingRow(
 ) {
     ListItem(
         headlineContent = { Text(contentDescription) },
-        leadingContent = {
-            Icon(
-                imageVector = icon,
-                contentDescription = contentDescription
-            )
-        },
+        leadingContent = { Icon(imageVector = icon, contentDescription = contentDescription) },
         supportingContent = {
             Column(modifier = Modifier.padding(top = MaterialTheme.spacing.small)) {
                 Slider(
@@ -36,7 +31,9 @@ fun SliderSettingRow(
                 )
                 if (labels != null) {
                     Row(
-                        modifier = Modifier.fillMaxWidth().padding(horizontal = MaterialTheme.spacing.small),
+                        modifier =
+                            Modifier.fillMaxWidth()
+                                .padding(horizontal = MaterialTheme.spacing.small),
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
                         labels.forEach { label ->

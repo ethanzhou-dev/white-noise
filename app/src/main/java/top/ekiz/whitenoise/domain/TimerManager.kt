@@ -1,21 +1,20 @@
 package top.ekiz.whitenoise.domain
 
-import top.ekiz.whitenoise.data.SettingsDataStore
-
+import javax.inject.Inject
+import javax.inject.Singleton
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.launch
-import javax.inject.Inject
-import javax.inject.Singleton
+import top.ekiz.whitenoise.data.SettingsDataStore
 
 enum class TimerEvent {
     START_FADE_OUT,
@@ -24,9 +23,7 @@ enum class TimerEvent {
 }
 
 @Singleton
-class TimerManager @Inject constructor(
-    private val settingsDataStore: SettingsDataStore
-) {
+class TimerManager @Inject constructor(private val settingsDataStore: SettingsDataStore) {
     private val _activeRemainingMillis = MutableStateFlow(0L)
     val activeRemainingMillis = _activeRemainingMillis.asStateFlow()
 
@@ -36,38 +33,36 @@ class TimerManager @Inject constructor(
     private val _isTimerRunning = MutableStateFlow(false)
     val isTimerRunning = _isTimerRunning.asStateFlow()
 
-    private val _timerEvents = MutableSharedFlow<TimerEvent>(
-        replay = 1,
-        onBufferOverflow = BufferOverflow.DROP_OLDEST
-    )
+    private val _timerEvents =
+        MutableSharedFlow<TimerEvent>(replay = 1, onBufferOverflow = BufferOverflow.DROP_OLDEST)
     val timerEvents = _timerEvents.asSharedFlow()
 
     private val scope = CoroutineScope(Dispatchers.Default + SupervisorJob())
     private var tickerJob: Job? = null
 
     init {
-        
+
         scope.launch {
             val total = settingsDataStore.totalTimerMillisFlow.first()
             if (total > 0L) {
                 _totalTimerMillis.value = total
             }
-            
+
             val endTime = settingsDataStore.timerEndTimeFlow.first()
             if (endTime > 0L) {
                 val remaining = endTime - System.currentTimeMillis()
                 if (remaining > 0) {
-                    
+
                     startTicker(remaining, endTime)
                 } else {
-                    
+
                     settingsDataStore.saveTimerEndTime(0L)
                     settingsDataStore.saveTimerRemaining(0L)
                     settingsDataStore.saveTotalTimerMillis(0L)
                     _totalTimerMillis.value = 0L
                 }
             } else {
-                
+
                 val remaining = settingsDataStore.timerRemainingFlow.first()
                 if (remaining > 0L) {
                     _activeRemainingMillis.value = remaining
@@ -80,52 +75,49 @@ class TimerManager @Inject constructor(
 
     fun startTimer(durationMs: Long, isResume: Boolean = false) {
         if (durationMs <= 0) return
-        
+
         scope.launch {
             if (!isResume || _totalTimerMillis.value <= 0L) {
                 _totalTimerMillis.value = durationMs
                 settingsDataStore.saveTotalTimerMillis(durationMs)
             }
             val endTime = System.currentTimeMillis() + durationMs
-            
-            
+
             settingsDataStore.saveTimerRemaining(0L)
             settingsDataStore.saveTimerEndTime(endTime)
-            
+
             startTicker(durationMs, endTime)
         }
     }
 
     fun pauseTimer() {
         tickerJob?.cancel()
-        
+
         scope.launch {
             val remaining = _activeRemainingMillis.value
             _isTimerRunning.value = false
-            
-            
+
             settingsDataStore.saveTimerEndTime(0L)
             if (remaining > 0) {
                 settingsDataStore.saveTimerRemaining(remaining)
             }
-            
+
             _timerEvents.tryEmit(TimerEvent.TIMER_CANCELLED)
         }
     }
 
     fun cancelTimer() {
         tickerJob?.cancel()
-        
+
         scope.launch {
             _activeRemainingMillis.value = 0L
             _totalTimerMillis.value = 0L
             _isTimerRunning.value = false
-            
-            
+
             settingsDataStore.saveTimerEndTime(0L)
             settingsDataStore.saveTimerRemaining(0L)
             settingsDataStore.saveTotalTimerMillis(0L)
-            
+
             _timerEvents.tryEmit(TimerEvent.TIMER_CANCELLED)
         }
     }
@@ -134,36 +126,36 @@ class TimerManager @Inject constructor(
         tickerJob?.cancel()
         _isTimerRunning.value = true
         _activeRemainingMillis.value = durationMs
-        
-        tickerJob = scope.launch {
-            var fadeTriggered = false
-            
-            while (true) {
-                val remaining = endTime - System.currentTimeMillis()
-                
-                
-                if (remaining <= 60000L && !fadeTriggered) {
-                    fadeTriggered = true
-                    _timerEvents.tryEmit(TimerEvent.START_FADE_OUT)
-                }
 
-                if (remaining > 0) {
-                    _activeRemainingMillis.value = remaining
-                } else {
-                    
-                    _activeRemainingMillis.value = 0L
-                    _totalTimerMillis.value = 0L
-                    _isTimerRunning.value = false
-                    
-                    settingsDataStore.saveTimerEndTime(0L)
-                    settingsDataStore.saveTimerRemaining(0L)
-                    settingsDataStore.saveTotalTimerMillis(0L)
-                    
-                    _timerEvents.tryEmit(TimerEvent.TIMER_FINISHED)
-                    break
+        tickerJob =
+            scope.launch {
+                var fadeTriggered = false
+
+                while (true) {
+                    val remaining = endTime - System.currentTimeMillis()
+
+                    if (remaining <= 60000L && !fadeTriggered) {
+                        fadeTriggered = true
+                        _timerEvents.tryEmit(TimerEvent.START_FADE_OUT)
+                    }
+
+                    if (remaining > 0) {
+                        _activeRemainingMillis.value = remaining
+                    } else {
+
+                        _activeRemainingMillis.value = 0L
+                        _totalTimerMillis.value = 0L
+                        _isTimerRunning.value = false
+
+                        settingsDataStore.saveTimerEndTime(0L)
+                        settingsDataStore.saveTimerRemaining(0L)
+                        settingsDataStore.saveTotalTimerMillis(0L)
+
+                        _timerEvents.tryEmit(TimerEvent.TIMER_FINISHED)
+                        break
+                    }
+                    delay(1000)
                 }
-                delay(1000)
             }
-        }
     }
 }

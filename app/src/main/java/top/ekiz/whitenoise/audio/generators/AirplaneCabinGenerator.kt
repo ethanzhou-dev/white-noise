@@ -30,12 +30,12 @@ class AirplaneCabinGenerator : NoiseGenerator() {
 
         lastDeepBrownOutL = lastDeepBrownOutL * 0.9901 + wL * 0.0099
         lastDeepBrownOutR = lastDeepBrownOutR * 0.9901 + wR * 0.0099
-        
+
         cabinPhase += phaseInc
         if (cabinPhase > 2.0 * PI) cabinPhase -= 2.0 * PI
-        
+
         val drone = sin(cabinPhase) * 0.2
-        
+
         outL = (lastDeepBrownOutL * 4.0 + drone).toFloat()
         outR = (lastDeepBrownOutR * 4.0 + drone).toFloat()
     }

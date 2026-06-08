@@ -20,14 +20,18 @@ class VelvetNoiseGenerator : NoiseGenerator() {
 
     override fun updateSampleRate(sr: Double) {
         super.updateSampleRate(sr)
-        
+
         baseGrid = 1.coerceAtLeast((0.00034 * sr).toInt())
         varianceGrid = 0.00034 * sr
     }
 
     override fun reset() {
-        velvetCounterL = 0; velvetPulseL = 0.0; velvetLpfL = 0.0
-        velvetCounterR = 0; velvetPulseR = 0.0; velvetLpfR = 0.0
+        velvetCounterL = 0
+        velvetPulseL = 0.0
+        velvetLpfL = 0.0
+        velvetCounterR = 0
+        velvetPulseR = 0.0
+        velvetLpfR = 0.0
     }
 
     override fun process(whiteL: Float, whiteR: Float) {
@@ -44,7 +48,7 @@ class VelvetNoiseGenerator : NoiseGenerator() {
         }
         velvetLpfL = velvetLpfL * 0.95238 + velvetPulseL * 0.04762
         outL = (velvetLpfL * 2.5).toFloat()
-        
+
         velvetCounterR++
         if (velvetCounterR >= velvetGridR) {
             velvetCounterR = 0

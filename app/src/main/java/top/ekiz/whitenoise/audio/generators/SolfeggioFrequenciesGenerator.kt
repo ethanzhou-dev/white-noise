@@ -6,7 +6,7 @@ import kotlin.math.sin
 class SolfeggioFrequenciesGenerator : NoiseGenerator() {
     private var phase = 0.0
     private var phaseInc = 0.0
-    
+
     init {
         updateSampleRate(44100.0)
     }
@@ -24,10 +24,9 @@ class SolfeggioFrequenciesGenerator : NoiseGenerator() {
     override fun process(whiteL: Float, whiteR: Float) {
         phase += phaseInc
         if (phase > 2.0 * PI) phase -= 2.0 * PI
-        
-        
+
         val output = (sin(phase) * 0.5).toFloat()
-        
+
         outL = output
         outR = output
     }

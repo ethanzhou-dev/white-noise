@@ -23,7 +23,6 @@ class WombSoundsGenerator : NoiseGenerator() {
         breathPhase = 0.0
     }
 
-    
     private fun smoothWave(phase: Double): Double {
         val tri = if (phase < 0.5) phase * 2.0 else 2.0 - phase * 2.0
         return tri * tri * (3.0 - 2.0 * tri)
@@ -32,18 +31,15 @@ class WombSoundsGenerator : NoiseGenerator() {
     override fun process(whiteL: Float, whiteR: Float) {
         heartbeat.process(whiteL, whiteR)
         fluidNoise.process(whiteL, whiteR)
-        
-        
+
         breathPhase += phaseInc
         if (breathPhase >= 1.0) breathPhase -= 1.0
-        
-        
+
         val breathEnvelope = 0.6 + 0.4 * smoothWave(breathPhase)
-        
-        
+
         val mixedL = (heartbeat.outL * 0.7f) + (fluidNoise.outL * 0.6f * breathEnvelope.toFloat())
         val mixedR = (heartbeat.outR * 0.7f) + (fluidNoise.outR * 0.6f * breathEnvelope.toFloat())
-        
+
         outL = mixedL
         outR = mixedR
     }

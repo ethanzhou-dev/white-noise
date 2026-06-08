@@ -1,12 +1,12 @@
 package top.ekiz.whitenoise.service
 
-import top.ekiz.whitenoise.data.SettingsDataStore
-import top.ekiz.whitenoise.domain.TimerManager
-import top.ekiz.whitenoise.domain.TimerEvent
-import top.ekiz.whitenoise.domain.NoiseType
-
+import android.media.AudioDeviceCallback
+import android.media.AudioDeviceInfo
+import android.media.AudioManager
+import android.os.Bundle
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
+import androidx.media3.common.Player
 import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.audio.AudioSink
@@ -14,26 +14,24 @@ import androidx.media3.exoplayer.audio.DefaultAudioSink
 import androidx.media3.exoplayer.source.SilenceMediaSource
 import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaSessionService
-import dagger.hilt.android.AndroidEntryPoint
-import top.ekiz.whitenoise.audio.NoiseAudioProcessor
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.cancel
-import android.media.AudioManager
-import android.os.Bundle
 import androidx.media3.session.SessionCommand
 import androidx.media3.session.SessionResult
 import com.google.common.util.concurrent.Futures
 import com.google.common.util.concurrent.ListenableFuture
-import androidx.media3.common.Player
-import android.media.AudioDeviceCallback
-import android.media.AudioDeviceInfo
-import kotlinx.coroutines.Job
+import dagger.hilt.android.AndroidEntryPoint
 import javax.inject.Inject
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
+import top.ekiz.whitenoise.audio.NoiseAudioProcessor
+import top.ekiz.whitenoise.data.SettingsDataStore
+import top.ekiz.whitenoise.domain.TimerEvent
+import top.ekiz.whitenoise.domain.TimerManager
 
 @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
 @AndroidEntryPoint
@@ -45,144 +43,150 @@ class NoiseService : MediaSessionService() {
     private var mediaSession: MediaSession? = null
     lateinit var player: ExoPlayer
     val noiseProcessor = NoiseAudioProcessor()
-    
+
     private val serviceScope = CoroutineScope(Dispatchers.Main + SupervisorJob())
     private lateinit var audioManager: AudioManager
     private var modeListener: Any? = null
     private var isPausedByCall = false
     private var isPausedByDeviceDisconnect = false
     private var fadeJob: Job? = null
-    
-    private val audioDeviceCallback = object : AudioDeviceCallback() {
-        override fun onAudioDevicesAdded(addedDevices: Array<out AudioDeviceInfo>?) {
-            val hasExternalDevice = addedDevices?.any { it.isExternalDevice() } == true
-            if (hasExternalDevice && isPausedByDeviceDisconnect) {
-                isPausedByDeviceDisconnect = false
-                
-                
-                fadeJob?.cancel()
-                fadeJob = serviceScope.launch {
-                    
-                    delay(1000L)
-                    
-                    
-                    
-                    val currentDevices = audioManager.getDevices(AudioManager.GET_DEVICES_OUTPUTS)
-                    val stillConnected = currentDevices.any { it.isExternalDevice() }
-                    
-                    if (stillConnected) {
-                        
-                        resumePlaybackWithFade()
-                    } else {
-                        
-                        isPausedByDeviceDisconnect = true
-                    }
+
+    private val audioDeviceCallback =
+        object : AudioDeviceCallback() {
+            override fun onAudioDevicesAdded(addedDevices: Array<out AudioDeviceInfo>?) {
+                val hasExternalDevice = addedDevices?.any { it.isExternalDevice() } == true
+                if (hasExternalDevice && isPausedByDeviceDisconnect) {
+                    isPausedByDeviceDisconnect = false
+
+                    fadeJob?.cancel()
+                    fadeJob =
+                        serviceScope.launch {
+                            delay(1000L)
+
+                            val currentDevices =
+                                audioManager.getDevices(AudioManager.GET_DEVICES_OUTPUTS)
+                            val stillConnected = currentDevices.any { it.isExternalDevice() }
+
+                            if (stillConnected) {
+
+                                resumePlaybackWithFade()
+                            } else {
+
+                                isPausedByDeviceDisconnect = true
+                            }
+                        }
                 }
             }
         }
-    }
 
     private fun AudioDeviceInfo.isExternalDevice(): Boolean {
         return type == AudioDeviceInfo.TYPE_BLUETOOTH_A2DP ||
-               type == AudioDeviceInfo.TYPE_BLUETOOTH_SCO ||
-               type == AudioDeviceInfo.TYPE_WIRED_HEADSET ||
-               type == AudioDeviceInfo.TYPE_WIRED_HEADPHONES ||
-               type == AudioDeviceInfo.TYPE_USB_HEADSET ||
-               type == AudioDeviceInfo.TYPE_USB_DEVICE ||
-               type == AudioDeviceInfo.TYPE_HEARING_AID ||
-               type == AudioDeviceInfo.TYPE_BLE_HEADSET ||
-               type == AudioDeviceInfo.TYPE_BLE_SPEAKER ||
-               type == AudioDeviceInfo.TYPE_BLE_BROADCAST
+            type == AudioDeviceInfo.TYPE_BLUETOOTH_SCO ||
+            type == AudioDeviceInfo.TYPE_WIRED_HEADSET ||
+            type == AudioDeviceInfo.TYPE_WIRED_HEADPHONES ||
+            type == AudioDeviceInfo.TYPE_USB_HEADSET ||
+            type == AudioDeviceInfo.TYPE_USB_DEVICE ||
+            type == AudioDeviceInfo.TYPE_HEARING_AID ||
+            type == AudioDeviceInfo.TYPE_BLE_HEADSET ||
+            type == AudioDeviceInfo.TYPE_BLE_SPEAKER ||
+            type == AudioDeviceInfo.TYPE_BLE_BROADCAST
     }
 
     override fun onCreate() {
         super.onCreate()
 
-        val renderersFactory = object : DefaultRenderersFactory(this) {
-            override fun buildAudioSink(
-                context: android.content.Context,
-                enableFloatOutput: Boolean,
-                enableAudioTrackPlaybackParams: Boolean
-            ): AudioSink? {
-                return DefaultAudioSink.Builder(context)
-                    .setAudioProcessors(arrayOf(noiseProcessor))
-                    .build()
-            }
-        }
-
-        player = ExoPlayer.Builder(this, renderersFactory)
-            .setAudioAttributes(
-                AudioAttributes.Builder()
-                    .setContentType(C.AUDIO_CONTENT_TYPE_MUSIC)
-                    .setUsage(C.USAGE_MEDIA)
-                    .build(),
-                false 
-            )
-            .setHandleAudioBecomingNoisy(true)
-            .build()
-
-        player.addListener(object : Player.Listener {
-            override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) {
-                if (!playWhenReady && reason == Player.PLAY_WHEN_READY_CHANGE_REASON_AUDIO_BECOMING_NOISY) {
-                    isPausedByDeviceDisconnect = true
-                    
-                    fadeJob?.cancel()
-                } else if (playWhenReady && reason == Player.PLAY_WHEN_READY_CHANGE_REASON_USER_REQUEST) {
-                    isPausedByDeviceDisconnect = false
+        val renderersFactory =
+            object : DefaultRenderersFactory(this) {
+                override fun buildAudioSink(
+                    context: android.content.Context,
+                    enableFloatOutput: Boolean,
+                    enableAudioTrackPlaybackParams: Boolean
+                ): AudioSink? {
+                    return DefaultAudioSink.Builder(context)
+                        .setAudioProcessors(arrayOf(noiseProcessor))
+                        .build()
                 }
             }
-        })
 
-        val sessionCallback = object : MediaSession.Callback {
-            override fun onConnect(
-                session: MediaSession,
-                controller: MediaSession.ControllerInfo
-            ): MediaSession.ConnectionResult {
-                val availableCommands = MediaSession.ConnectionResult.DEFAULT_SESSION_AND_LIBRARY_COMMANDS.buildUpon()
-                    .add(SessionCommand("PLAY_WITH_FADE", Bundle.EMPTY))
-                    .add(SessionCommand("PAUSE_WITH_FADE", Bundle.EMPTY))
-                    .build()
-                return MediaSession.ConnectionResult.AcceptedResultBuilder(session)
-                    .setAvailableSessionCommands(availableCommands)
-                    .build()
-            }
+        player =
+            ExoPlayer.Builder(this, renderersFactory)
+                .setAudioAttributes(
+                    AudioAttributes.Builder()
+                        .setContentType(C.AUDIO_CONTENT_TYPE_MUSIC)
+                        .setUsage(C.USAGE_MEDIA)
+                        .build(),
+                    false
+                )
+                .setHandleAudioBecomingNoisy(true)
+                .build()
 
-            override fun onCustomCommand(
-                session: MediaSession,
-                controller: MediaSession.ControllerInfo,
-                customCommand: SessionCommand,
-                args: Bundle
-            ): ListenableFuture<SessionResult> {
-                when (customCommand.customAction) {
-                    "PLAY_WITH_FADE" -> {
-                        resumePlaybackWithFade()
-                    }
-                    "PAUSE_WITH_FADE" -> {
+        player.addListener(
+            object : Player.Listener {
+                override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) {
+                    if (
+                        !playWhenReady &&
+                            reason == Player.PLAY_WHEN_READY_CHANGE_REASON_AUDIO_BECOMING_NOISY
+                    ) {
+                        isPausedByDeviceDisconnect = true
+
                         fadeJob?.cancel()
-                        fadeJob = serviceScope.launch {
-                            animatePlayerVolume(player.volume, 0f, 500L)
-                            player.pause()
-                            player.seekTo(0)
-                            isPausedByCall = false
+                    } else if (
+                        playWhenReady && reason == Player.PLAY_WHEN_READY_CHANGE_REASON_USER_REQUEST
+                    ) {
+                        isPausedByDeviceDisconnect = false
+                    }
+                }
+            }
+        )
+
+        val sessionCallback =
+            object : MediaSession.Callback {
+                override fun onConnect(
+                    session: MediaSession,
+                    controller: MediaSession.ControllerInfo
+                ): MediaSession.ConnectionResult {
+                    val availableCommands =
+                        MediaSession.ConnectionResult.DEFAULT_SESSION_AND_LIBRARY_COMMANDS
+                            .buildUpon()
+                            .add(SessionCommand("PLAY_WITH_FADE", Bundle.EMPTY))
+                            .add(SessionCommand("PAUSE_WITH_FADE", Bundle.EMPTY))
+                            .build()
+                    return MediaSession.ConnectionResult.AcceptedResultBuilder(session)
+                        .setAvailableSessionCommands(availableCommands)
+                        .build()
+                }
+
+                override fun onCustomCommand(
+                    session: MediaSession,
+                    controller: MediaSession.ControllerInfo,
+                    customCommand: SessionCommand,
+                    args: Bundle
+                ): ListenableFuture<SessionResult> {
+                    when (customCommand.customAction) {
+                        "PLAY_WITH_FADE" -> {
+                            resumePlaybackWithFade()
+                        }
+                        "PAUSE_WITH_FADE" -> {
+                            fadeJob?.cancel()
+                            fadeJob =
+                                serviceScope.launch {
+                                    animatePlayerVolume(player.volume, 0f, 500L)
+                                    player.pause()
+                                    player.seekTo(0)
+                                    isPausedByCall = false
+                                }
                         }
                     }
+                    return Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS))
                 }
-                return Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS))
             }
-        }
 
-        mediaSession = MediaSession.Builder(this, player)
-            .setCallback(sessionCallback)
-            .build()
+        mediaSession = MediaSession.Builder(this, player).setCallback(sessionCallback).build()
 
-        
-        
         val durationUs = 365L * 24 * 60 * 60 * 1000 * 1000
         val silenceSource = SilenceMediaSource(durationUs)
 
         serviceScope.launch {
-            
-            
             val initialVolume = settingsDataStore.volumeFlow.first()
             val initialNoiseType = settingsDataStore.noiseTypeFlow.first()
             val initialBalance = settingsDataStore.balanceFlow.first()
@@ -193,37 +197,35 @@ class NoiseService : MediaSessionService() {
             noiseProcessor.balance = initialBalance
             noiseProcessor.isSpatialAudioEnabled = initialSpatial
 
-            
             player.setMediaSource(silenceSource)
             player.prepare()
 
-            launch { 
-                settingsDataStore.volumeFlow.collect { 
-                    noiseProcessor.volume = it 
+            launch {
+                settingsDataStore.volumeFlow.collect {
+                    noiseProcessor.volume = it
                     flushPlayerBufferIfNotPlaying()
-                } 
+                }
             }
-            launch { 
-                settingsDataStore.noiseTypeFlow.collect { 
+            launch {
+                settingsDataStore.noiseTypeFlow.collect {
                     noiseProcessor.forceImmediateSwitch = !player.isPlaying
-                    noiseProcessor.noiseType = it 
+                    noiseProcessor.noiseType = it
                     flushPlayerBufferIfNotPlaying()
-                } 
+                }
             }
-            launch { 
-                settingsDataStore.balanceFlow.collect { 
-                    noiseProcessor.balance = it 
+            launch {
+                settingsDataStore.balanceFlow.collect {
+                    noiseProcessor.balance = it
                     flushPlayerBufferIfNotPlaying()
-                } 
+                }
             }
-            launch { 
-                settingsDataStore.spatialAudioFlow.collect { 
-                    noiseProcessor.isSpatialAudioEnabled = it 
+            launch {
+                settingsDataStore.spatialAudioFlow.collect {
+                    noiseProcessor.isSpatialAudioEnabled = it
                     flushPlayerBufferIfNotPlaying()
-                } 
+                }
             }
-            
-            
+
             launch {
                 timerManager.timerEvents.collect { event ->
                     when (event) {
@@ -231,9 +233,10 @@ class NoiseService : MediaSessionService() {
                             val durationMs = timerManager.activeRemainingMillis.value
                             if (durationMs > 0 && player.isPlaying) {
                                 fadeJob?.cancel()
-                                fadeJob = serviceScope.launch {
-                                    animatePlayerVolume(player.volume, 0f, durationMs)
-                                }
+                                fadeJob =
+                                    serviceScope.launch {
+                                        animatePlayerVolume(player.volume, 0f, durationMs)
+                                    }
                             }
                         }
                         TimerEvent.TIMER_FINISHED -> {
@@ -244,9 +247,10 @@ class NoiseService : MediaSessionService() {
                         TimerEvent.TIMER_CANCELLED -> {
                             if (player.isPlaying && !isPausedByCall) {
                                 fadeJob?.cancel()
-                                fadeJob = serviceScope.launch {
-                                    animatePlayerVolume(player.volume, 1f, 1000L)
-                                }
+                                fadeJob =
+                                    serviceScope.launch {
+                                        animatePlayerVolume(player.volume, 1f, 1000L)
+                                    }
                             }
                         }
                     }
@@ -258,8 +262,7 @@ class NoiseService : MediaSessionService() {
     }
 
     private fun flushPlayerBuffer() {
-        
-        
+
         val targetPos = if (player.currentPosition == 0L) 1L else 0L
         player.seekTo(targetPos)
     }
@@ -274,13 +277,18 @@ class NoiseService : MediaSessionService() {
         audioManager = getSystemService(android.content.Context.AUDIO_SERVICE) as AudioManager
         audioManager.registerAudioDeviceCallback(audioDeviceCallback, null)
         if (modeListener == null) {
-            modeListener = AudioManager.OnModeChangedListener { mode ->
-                val isCallActive = mode == AudioManager.MODE_IN_CALL || 
-                                   mode == AudioManager.MODE_RINGTONE || 
-                                   mode == AudioManager.MODE_IN_COMMUNICATION
-                handleCallState(isCallActive)
-            }
-            audioManager.addOnModeChangedListener(mainExecutor, modeListener as AudioManager.OnModeChangedListener)
+            modeListener =
+                AudioManager.OnModeChangedListener { mode ->
+                    val isCallActive =
+                        mode == AudioManager.MODE_IN_CALL ||
+                            mode == AudioManager.MODE_RINGTONE ||
+                            mode == AudioManager.MODE_IN_COMMUNICATION
+                    handleCallState(isCallActive)
+                }
+            audioManager.addOnModeChangedListener(
+                mainExecutor,
+                modeListener as AudioManager.OnModeChangedListener
+            )
         }
     }
 
@@ -288,12 +296,13 @@ class NoiseService : MediaSessionService() {
         if (isCallActive) {
             if (player.isPlaying) {
                 fadeJob?.cancel()
-                fadeJob = serviceScope.launch {
-                    animatePlayerVolume(player.volume, 0f, 500L)
-                    player.pause()
-                    player.seekTo(0)
-                    isPausedByCall = true
-                }
+                fadeJob =
+                    serviceScope.launch {
+                        animatePlayerVolume(player.volume, 0f, 500L)
+                        player.pause()
+                        player.seekTo(0)
+                        isPausedByCall = true
+                    }
             }
         } else {
             if (isPausedByCall) {
@@ -304,19 +313,22 @@ class NoiseService : MediaSessionService() {
 
     private fun resumePlaybackWithFade() {
         fadeJob?.cancel()
-        fadeJob = serviceScope.launch {
-            noiseProcessor.startFadeIn(1000L)
-            flushPlayerBuffer()
-            if (player.playbackState == Player.STATE_IDLE || 
-                player.playbackState == Player.STATE_ENDED || 
-                player.playerError != null) {
-                player.prepare()
+        fadeJob =
+            serviceScope.launch {
+                noiseProcessor.startFadeIn(1000L)
+                flushPlayerBuffer()
+                if (
+                    player.playbackState == Player.STATE_IDLE ||
+                        player.playbackState == Player.STATE_ENDED ||
+                        player.playerError != null
+                ) {
+                    player.prepare()
+                }
+                player.play()
+                isPausedByCall = false
+
+                animatePlayerVolume(0f, 1f, 200L)
             }
-            player.play()
-            isPausedByCall = false
-            
-            animatePlayerVolume(0f, 1f, 200L)
-        }
     }
 
     private suspend fun animatePlayerVolume(from: Float, to: Float, durationMs: Long) {
@@ -340,7 +352,9 @@ class NoiseService : MediaSessionService() {
     override fun onDestroy() {
         audioManager.unregisterAudioDeviceCallback(audioDeviceCallback)
         if (modeListener != null) {
-            audioManager.removeOnModeChangedListener(modeListener as AudioManager.OnModeChangedListener)
+            audioManager.removeOnModeChangedListener(
+                modeListener as AudioManager.OnModeChangedListener
+            )
         }
         mediaSession?.run {
             player.release()

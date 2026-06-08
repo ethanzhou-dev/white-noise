@@ -6,16 +6,16 @@ import androidx.lifecycle.viewModelScope
 import androidx.media3.session.MediaController
 import androidx.media3.session.SessionCommand
 import dagger.hilt.android.lifecycle.HiltViewModel
+import javax.inject.Inject
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
-import top.ekiz.whitenoise.domain.NoiseType
 import top.ekiz.whitenoise.data.SettingsDataStore
+import top.ekiz.whitenoise.domain.NoiseType
 import top.ekiz.whitenoise.domain.TimerManager
-import javax.inject.Inject
 
 data class NoiseUiState(
     val volume: Float = 0.5f,
@@ -32,59 +32,59 @@ data class NoiseUiState(
 )
 
 @HiltViewModel
-class NoiseViewModel @Inject constructor(
-    private val dataStore: SettingsDataStore,
-    private val timerManager: TimerManager
-) : ViewModel() {
+class NoiseViewModel
+@Inject
+constructor(private val dataStore: SettingsDataStore, private val timerManager: TimerManager) :
+    ViewModel() {
 
     private var mediaController: MediaController? = null
 
-    
     private val _isPlaying = MutableStateFlow(false)
 
-    private val settingsFlow = combine(
-        dataStore.volumeFlow,
-        dataStore.balanceFlow,
-        dataStore.noiseTypeFlow,
-        dataStore.sleepTimerFlow,
-        dataStore.themeModeFlow,
-        dataStore.spatialAudioFlow
-    ) { values ->
-        NoiseUiState(
-            volume = values[0] as Float,
-            balance = values[1] as Float,
-            noiseType = values[2] as NoiseType,
-            sleepTimerMinutes = values[3] as Int,
-            themeMode = values[4] as String,
-            isSpatialAudioEnabled = values[5] as Boolean
-        )
-    }
+    private val settingsFlow =
+        combine(
+            dataStore.volumeFlow,
+            dataStore.balanceFlow,
+            dataStore.noiseTypeFlow,
+            dataStore.sleepTimerFlow,
+            dataStore.themeModeFlow,
+            dataStore.spatialAudioFlow
+        ) { values ->
+            NoiseUiState(
+                volume = values[0] as Float,
+                balance = values[1] as Float,
+                noiseType = values[2] as NoiseType,
+                sleepTimerMinutes = values[3] as Int,
+                themeMode = values[4] as String,
+                isSpatialAudioEnabled = values[5] as Boolean
+            )
+        }
 
-    private val runtimeFlow = combine(
-        _isPlaying,
-        timerManager.activeRemainingMillis,
-        timerManager.totalTimerMillis,
-        timerManager.isTimerRunning
-    ) { isPlaying, remaining, total, isTimerRunning ->
-        arrayOf(isPlaying, remaining, total, isTimerRunning)
-    }
+    private val runtimeFlow =
+        combine(
+            _isPlaying,
+            timerManager.activeRemainingMillis,
+            timerManager.totalTimerMillis,
+            timerManager.isTimerRunning
+        ) { isPlaying, remaining, total, isTimerRunning ->
+            arrayOf(isPlaying, remaining, total, isTimerRunning)
+        }
 
-    val uiState: StateFlow<NoiseUiState> = combine(
-        settingsFlow,
-        runtimeFlow
-    ) { settings, runtime ->
-        settings.copy(
-            isPlaying = runtime[0] as Boolean,
-            activeRemainingMillis = runtime[1] as Long,
-            totalTimerMillis = runtime[2] as Long,
-            isTimerRunning = runtime[3] as Boolean,
-            isLoading = false
-        )
-    }.stateIn(
-        scope = viewModelScope,
-        started = SharingStarted.WhileSubscribed(5000),
-        initialValue = NoiseUiState(isLoading = true)
-    )
+    val uiState: StateFlow<NoiseUiState> =
+        combine(settingsFlow, runtimeFlow) { settings, runtime ->
+                settings.copy(
+                    isPlaying = runtime[0] as Boolean,
+                    activeRemainingMillis = runtime[1] as Long,
+                    totalTimerMillis = runtime[2] as Long,
+                    isTimerRunning = runtime[3] as Boolean,
+                    isLoading = false
+                )
+            }
+            .stateIn(
+                scope = viewModelScope,
+                started = SharingStarted.WhileSubscribed(5000),
+                initialValue = NoiseUiState(isLoading = true)
+            )
 
     fun setMediaController(controller: MediaController?) {
         mediaController = controller
@@ -97,15 +97,20 @@ class NoiseViewModel @Inject constructor(
 
     fun togglePlayPause() {
         val controller = mediaController ?: return
-        
-        
+
         val wasPlaying = _isPlaying.value
         _isPlaying.value = !wasPlaying
-        
+
         if (wasPlaying) {
-            controller.sendCustomCommand(SessionCommand("PAUSE_WITH_FADE", Bundle.EMPTY), Bundle.EMPTY)
+            controller.sendCustomCommand(
+                SessionCommand("PAUSE_WITH_FADE", Bundle.EMPTY),
+                Bundle.EMPTY
+            )
         } else {
-            controller.sendCustomCommand(SessionCommand("PLAY_WITH_FADE", Bundle.EMPTY), Bundle.EMPTY)
+            controller.sendCustomCommand(
+                SessionCommand("PLAY_WITH_FADE", Bundle.EMPTY),
+                Bundle.EMPTY
+            )
         }
     }
 
@@ -125,7 +130,7 @@ class NoiseViewModel @Inject constructor(
         viewModelScope.launch {
             dataStore.saveSleepTimer(minutes)
             if (timerManager.isTimerRunning.value) {
-                
+
                 val totalMillis = minutes * 60000L
                 if (totalMillis > 0) {
                     timerManager.startTimer(totalMillis, isResume = false)
@@ -149,12 +154,13 @@ class NoiseViewModel @Inject constructor(
         val resumeMillis = timerManager.activeRemainingMillis.value
         val isResume = resumeMillis > 0L
 
-        val durationMillis = if (isResume) {
-            resumeMillis
-        } else {
-            uiStateVal.sleepTimerMinutes * 60000L
-        }
-        
+        val durationMillis =
+            if (isResume) {
+                resumeMillis
+            } else {
+                uiStateVal.sleepTimerMinutes * 60000L
+            }
+
         timerManager.startTimer(durationMillis, isResume)
     }
 
