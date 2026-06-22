@@ -5,6 +5,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.text.style.TextAlign
 import top.ekiz.whitenoise.ui.theme.spacing
 
 @Composable
@@ -33,12 +34,18 @@ fun SliderSettingRow(
                     Row(
                         modifier =
                             Modifier.fillMaxWidth()
-                                .padding(horizontal = MaterialTheme.spacing.small),
-                        horizontalArrangement = Arrangement.SpaceBetween
+                                .padding(horizontal = MaterialTheme.spacing.small)
                     ) {
-                        labels.forEach { label ->
+                        labels.forEachIndexed { index, label ->
+                            val textAlign = when (index) {
+                                0 -> TextAlign.Start
+                                labels.lastIndex -> TextAlign.End
+                                else -> TextAlign.Center
+                            }
                             Text(
                                 text = label,
+                                modifier = Modifier.weight(1f),
+                                textAlign = textAlign,
                                 style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )

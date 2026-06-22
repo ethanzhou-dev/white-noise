@@ -14,6 +14,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.StrokeCap
 import java.util.Calendar
+import kotlin.math.roundToInt
 import top.ekiz.whitenoise.ui.components.SliderSettingRow
 import top.ekiz.whitenoise.ui.theme.spacing
 
@@ -96,7 +97,7 @@ fun SettingsScreen(
             icon = Icons.Filled.Schedule,
             contentDescription = "倒计时长: $sleepTimer 分钟",
             value = sleepTimer.coerceAtMost(120).toFloat(),
-            onValueChange = { onSleepTimerChanged(it.toInt()) },
+            onValueChange = { onSleepTimerChanged(it.roundToInt()) },
             valueRange = 0f..120f,
             labels = listOf("0", "60", "120"),
             steps = 11
