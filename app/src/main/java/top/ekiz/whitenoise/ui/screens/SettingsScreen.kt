@@ -1,5 +1,6 @@
 package top.ekiz.whitenoise.ui.screens
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -115,17 +116,10 @@ fun SettingsScreen(
         ListItem(
             headlineContent = { Text("指定时间关闭") },
             supportingContent = {
-                Text(
-                    (if (isTimerRunning) "将在 %02d:%02d 自动关闭 (运行中)" else "将在 %02d:%02d 自动关闭").format(
-                        targetHour,
-                        targetMinute
-                    )
-                )
+                Text("将在 %02d:%02d 自动关闭".format(targetHour, targetMinute))
             },
             leadingContent = { Icon(Icons.Filled.Schedule, contentDescription = null) },
-            trailingContent = {
-                OutlinedButton(onClick = { showTimePicker = true }) { Text("设定时间") }
-            }
+            modifier = Modifier.clickable { showTimePicker = true }
         )
 
         if (showTimePicker) {
