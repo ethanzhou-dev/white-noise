@@ -12,7 +12,9 @@ import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.Modifier
 import top.ekiz.whitenoise.domain.NoiseType
 import top.ekiz.whitenoise.ui.NoiseUiState
 import top.ekiz.whitenoise.ui.NoiseViewModel
@@ -78,9 +80,12 @@ fun MainAppScreen(uiState: NoiseUiState, viewModel: NoiseViewModel) {
             Pair(NoiseType.CAMPFIRE, "营火声")
         )
 
+    val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
+
     Scaffold(
+        modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
         topBar = {
-            TopAppBar(
+            MediumTopAppBar(
                 title = {
                     Text(
                         when (selectedTab) {
@@ -101,7 +106,8 @@ fun MainAppScreen(uiState: NoiseUiState, viewModel: NoiseViewModel) {
                             )
                         }
                     }
-                }
+                },
+                scrollBehavior = scrollBehavior
             )
         },
         bottomBar = {
